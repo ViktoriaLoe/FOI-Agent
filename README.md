@@ -40,9 +40,11 @@ Then add your API keys to `.env`: `GOOGLE_API_KEY` for Gemini, and `LANGSMITH_AP
 Check the setup:
 
 ```bash
-pytest
-ruff check .
+python -m pytest
+python -m ruff check .
 ```
+
+The tests use fake models, so they make no API calls.
 
 ## Run it
 
@@ -141,6 +143,10 @@ python evals/score_traces.py             # write them to LangSmith
 ```
 
 The script reads existing traces and makes no model calls. Running it again replaces earlier scores rather than adding to them. Each score records a `checks_version`, a hash of `checks.py`, so scores from changed checks can be told apart. The default project is `foi-agent-local`, where LangSmith files traces sent with the agent settings in `.env`. Use `--project` to score another project.
+
+## Evaluation dataset
+
+[evals/datasets/golden.jsonl](evals/datasets/golden.jsonl) holds 63 labelled requests covering normal cases, edge cases and high-risk failures. [evals/datasets/README.md](evals/datasets/README.md) explains the labels, what each slice tests, the known gaps and how the before and after are kept honest. `python -m pytest tests/test_golden_dataset.py` checks the labels for format errors and unknown ids.
 
 ## Knowledge base
 
