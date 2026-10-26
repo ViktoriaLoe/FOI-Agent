@@ -1,0 +1,14 @@
+docs/*
+
+# Secrets
+.env
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# LangGraph dev server
+.langgraph_api/
