@@ -67,6 +67,18 @@ def test_no_regime_guidance_fails():
     assert regime_guidance_found(foi_run(regime_guidance=[]))["score"] == 0
 
 
+def test_evidence_check_does_not_apply_when_an_unclear_regime_escalated_before_retrieval():
+    unclear_foi = {
+        "request": "My records, and your policy on housing banding.",
+        "regime": "FOI",
+        "regime_scores": {"FOI": 0.48, "SAR": 0.45, "EIR": 0.04, "BAU": 0.03},
+        "regime_guidance": [{"id": "REG-MIXED", "source": "regime_guidance"}],
+        "action": "escalate",
+        "escalation_reasons": ["Regime unclear: FOI 0.48, SAR 0.45."],
+    }
+    assert evidence_found(unclear_foi)["score"] is None
+
+
 def test_evidence_with_only_guidance_fails():
     run = foi_run(evidence=[{"id": "EX-S40", "source": "exemption_guidance"}])
     assert evidence_found(run)["score"] == 0

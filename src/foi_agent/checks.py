@@ -55,8 +55,9 @@ def regime_guidance_found(outputs: dict) -> dict:
 
 def evidence_found(outputs: dict) -> dict:
     """Retrieval: an FOI case found at least one published record or past response."""
-    if outputs.get("regime") != "FOI":
-        return _result("evidence_found", None, "Not an FOI case.")
+    # Only FOI cases reach retrieval, and not those escalated first because the regime was unclear.
+    if "evidence" not in outputs:
+        return _result("evidence_found", None, "Evidence retrieval did not run.")
     ids = [d["id"] for d in outputs.get("evidence") or [] if d["source"] in PUBLISHED_SOURCES]
     return _result("evidence_found", bool(ids), ", ".join(ids) or "No published records found.")
 
