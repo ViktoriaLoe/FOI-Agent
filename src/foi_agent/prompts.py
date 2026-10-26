@@ -3,7 +3,7 @@
 Bump PROMPT_VERSION whenever a prompt or question changes, so experiments can be compared.
 """
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 COUNCIL = "Northbrook Borough Council"
 

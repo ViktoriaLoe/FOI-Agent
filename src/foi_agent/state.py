@@ -67,7 +67,6 @@ class InputState(TypedDict):
 class FOIState(InputState, total=False):
     """Full graph state."""
 
-    regime_guidance: list[dict]
     regime: Regime
     regime_scores: dict[str, float]  # the classifier's probability for each regime
     deadline: str  # ISO date

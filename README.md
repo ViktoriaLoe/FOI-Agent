@@ -71,8 +71,7 @@ Replies are written to `var/outbox/` and each case is appended to `var/case_log.
 
 ```mermaid
 flowchart TD
-    A[Request received] --> B[retrieve_regime_guidance]
-    B --> C[classify_regime]
+    A[Request received] --> C[classify_regime]
     C -->|SAR / business as usual / EIR / unclear| D[route_non_foi]
     D -->|SAR / business as usual| K
     D -->|EIR / unclear| J
@@ -90,8 +89,7 @@ flowchart TD
 
 | Node | Type | What it does |
 | --- | --- | --- |
-| `retrieve_regime_guidance` | Retrieval | Searches the ICO regime guidance using the request text |
-| `classify_regime` | Judgement (decision model) | FOI, EIR, SAR or business as usual, with a probability for each |
+| `classify_regime` | Judgement (decision model) | FOI, EIR, SAR or business as usual, with a probability for each. It is given the ICO guidance summary for every regime, every time |
 | `route_non_foi` | Deterministic | SAR and business as usual get a template acknowledgement naming the team it has gone to; EIR escalates. If the top regime's probability is below `REGIME_MIN_PROB` (0.6, uncalibrated), the regime is unclear and the case escalates, FOI included |
 | `compute_deadline` | Deterministic | 20 working days, with day one the first working day after receipt. Skips weekends and bank holidays in any part of the UK (FOIA s10(6)) |
 | `retrieve_evidence` | Retrieval | Searches the disclosure log, publication scheme and exemption guidance using the request text |
@@ -126,7 +124,6 @@ Traces store the request text in full, and real requests can contain personal da
 
 | Check | Step | Fails when |
 | --- | --- | --- |
-| `regime_guidance_found` | Retrieve regime guidance | No guidance was retrieved for the classifier |
 | `evidence_found` | Retrieve evidence | An FOI case found no published record or past response |
 | `citations_grounded` | Assess | The assessment cites an id that wasn't retrieved |
 | `assessment_consistent` | Assess | The decision contradicts its own fields, for example a signpost that isn't marked as published |
@@ -180,7 +177,7 @@ The council is fictional: Northbrook Borough Council. The knowledge base lives i
 
 | File | Contents |
 | --- | --- |
-| `regime_guidance.json` | Summaries of ICO guidance on FOI, EIR, subject access, business as usual and mixed requests |
+| `regime_guidance.json` | Summaries of ICO guidance on FOI, EIR, subject access, business as usual and mixed requests, all given to the classifier |
 | `exemption_guidance.json` | Summaries of ICO guidance on s12, s14, s21, s22, s31, s40, s41, s42 and s43 |
 | `disclosure_log.json` | Past FOI and EIR responses the council has published |
 | `publication_scheme.json` | Datasets the council publishes routinely, mostly under the Local Government Transparency Code |

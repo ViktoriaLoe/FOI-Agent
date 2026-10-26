@@ -27,7 +27,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langsmith import Client, evaluate
 
 from foi_agent import nodes, rules
-from foi_agent.checks import ALL_CHECKS, regime_guidance_found
+from foi_agent.checks import ALL_CHECKS
 from foi_agent.graph import build_graph, run_metadata
 from foi_agent.prompts import PROMPT_VERSION
 
@@ -62,7 +62,6 @@ def full_target(pause: float):
 def classify_target(inputs: dict) -> dict:
     """Regime classification and the routing decision only: no OpenAI calls."""
     state = {"request": inputs["request"]}
-    state |= nodes.retrieve_regime_guidance(state)
     state |= nodes.classify_regime(state)
     if rules.route_by_regime(state) == "route_non_foi":
         state |= rules.route_non_foi(state)
@@ -121,7 +120,7 @@ def main() -> None:
     if args.classify_only:
         target, evaluators, mode = (
             classify_target,
-            [regime_correct, regime_guidance_found],
+            [regime_correct],
             "classify",
         )
     else:

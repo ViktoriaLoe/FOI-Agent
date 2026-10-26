@@ -5,7 +5,6 @@ from langchain_typesafe import ChoiceAnswer, ClassifierResponse
 from foi_agent import nodes
 from foi_agent.prompts import REGIME_CRITERIA
 
-GUIDANCE = [{"id": "REG-SAR", "title": "Right of access", "test": "Their own personal data."}]
 SCORES = {"SAR": 0.82, "FOI": 0.12, "EIR": 0.04, "BAU": 0.02}
 
 
@@ -26,12 +25,14 @@ def test_classify_regime_stores_the_label_and_distribution(monkeypatch):
     monkeypatch.setattr(nodes, "_classifier", lambda: fake)
     request = "Under FOI, send me everything you hold about me."
 
-    result = nodes.classify_regime({"request": request, "regime_guidance": GUIDANCE})
+    result = nodes.classify_regime({"request": request})
 
     assert result == {"regime": "SAR", "regime_scores": SCORES}
     [sent] = fake.requests
     assert sent["state"]["request"] == request
-    assert sent["state"]["ico_guidance"].startswith("[REG-SAR] Right of access")
+    # Every regime's guidance, every time: a classifier must be able to weigh each option.
+    for regime_id in ("REG-FOI", "REG-EIR", "REG-SAR", "REG-BAU", "REG-MIXED"):
+        assert f"[{regime_id}]" in sent["state"]["ico_guidance"]
     assert set(sent["questions"]) == {"regime"}
     assert sent["questions"]["regime"].criteria == REGIME_CRITERIA
     assert set(REGIME_CRITERIA) == {"FOI", "EIR", "SAR", "BAU"}

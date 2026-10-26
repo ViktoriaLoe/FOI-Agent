@@ -36,7 +36,6 @@ def build_graph(checkpointer=None):
     )
     builder = StateGraph(FOIState, input_schema=InputState)
 
-    builder.add_node("retrieve_regime_guidance", nodes.retrieve_regime_guidance)
     builder.add_node("classify_regime", nodes.classify_regime, retry_policy=classifier_retry)
     builder.add_node("route_non_foi", rules.route_non_foi)
     builder.add_node("compute_deadline", nodes.compute_deadline)
@@ -47,8 +46,7 @@ def build_graph(checkpointer=None):
     builder.add_node("human_review", nodes.human_review)
     builder.add_node("log_and_send", nodes.log_and_send)
 
-    builder.add_edge(START, "retrieve_regime_guidance")
-    builder.add_edge("retrieve_regime_guidance", "classify_regime")
+    builder.add_edge(START, "classify_regime")
     builder.add_conditional_edges(
         "classify_regime", rules.route_by_regime, ["compute_deadline", "route_non_foi"]
     )

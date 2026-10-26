@@ -20,7 +20,7 @@ from langgraph.types import Command, interrupt
 
 from foi_agent.deadline import foi_deadline
 from foi_agent.prompts import ASSESS_SYSTEM, DRAFT_SYSTEM, REGIME_CRITERIA, REGIME_INSTRUCTIONS
-from foi_agent.retrieval import search
+from foi_agent.retrieval import load_records, search
 from foi_agent.state import Assessment, FOIState
 
 DEFAULT_MODEL = "openai:gpt-6-luna"
@@ -71,8 +71,14 @@ def format_docs(docs: list[dict]) -> str:
     return "\n\n".join(blocks) or "(no records found)"
 
 
-def retrieve_regime_guidance(state: FOIState) -> dict:
-    return {"regime_guidance": search("regime_guidance", state["request"], k=RETRIEVAL_K)}
+@cache
+def regime_guidance() -> str:
+    """The ICO guidance summary for every regime, all of which the classifier sees every time.
+
+    A classifier has to weigh every option, so this is not retrieved: searching it once handed
+    the classifier only some of the tests, and regime accuracy fell to 55%.
+    """
+    return format_docs(load_records("regime_guidance"))
 
 
 def classify_regime(state: FOIState) -> dict:
@@ -84,7 +90,7 @@ def classify_regime(state: FOIState) -> dict:
         {
             "state": {
                 "request": state["request"],
-                "ico_guidance": format_docs(state.get("regime_guidance") or []),
+                "ico_guidance": regime_guidance(),
             },
             "questions": {
                 "regime": Choice(instructions=REGIME_INSTRUCTIONS, criteria=REGIME_CRITERIA)

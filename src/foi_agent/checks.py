@@ -47,12 +47,6 @@ def _is_own_domain(url: str) -> bool:
     return any(host == d or host.endswith("." + d) for d in OWN_DOMAINS)
 
 
-def regime_guidance_found(outputs: dict) -> dict:
-    """Retrieval: the classifier was given at least some guidance to work from."""
-    ids = [doc["id"] for doc in outputs.get("regime_guidance") or []]
-    return _result("regime_guidance_found", bool(ids), ", ".join(ids) or "No guidance retrieved.")
-
-
 def evidence_found(outputs: dict) -> dict:
     """Retrieval: an FOI case found at least one published record or past response."""
     # Only FOI cases reach retrieval, and not those escalated first because the regime was unclear.
@@ -161,7 +155,6 @@ def draft_no_new_personal_data(outputs: dict) -> dict:
 
 
 ALL_CHECKS = (
-    regime_guidance_found,
     evidence_found,
     citations_grounded,
     assessment_consistent,

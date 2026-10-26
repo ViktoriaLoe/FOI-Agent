@@ -9,9 +9,15 @@ RUN_ID = uuid.UUID("695a5fcb-2cc5-4be6-84dd-0292649e5073")
 ROUTED_SAR = {
     "request": "Send me everything you hold about me.",
     "regime": "SAR",
-    "regime_guidance": [{"id": "REG-SAR", "source": "regime_guidance"}],
     "action": "route",
     "draft": "We have passed your request to our Data Protection team.",
+}
+# An FOI case escalated before assessment: of the checks, only evidence_found applies.
+RETRIEVED_FOI = {
+    "request": "Please send me the senior officer salaries for 2025/26.",
+    "regime": "FOI",
+    "evidence": [{"id": "PS-003", "source": "publication_scheme"}],
+    "action": "escalate",
 }
 
 
@@ -44,16 +50,17 @@ def test_only_finished_case_runs_are_scored():
 def test_checks_that_do_not_apply_are_not_written():
     client = RecordingClient()
     score_run(client, traced_run(ROUTED_SAR))
+    assert client.feedback == []  # a routed SAR has no assessment or FOI draft to check
 
-    # A routed SAR has guidance to check, but no assessment or FOI draft.
-    assert [f["key"] for f in client.feedback] == ["regime_guidance_found"]
+    score_run(client, traced_run(RETRIEVED_FOI))
     [written] = client.feedback
+    assert written["key"] == "evidence_found"
     assert written["score"] == 1
-    assert written["feedback_id"] == feedback_id(RUN_ID, "regime_guidance_found")
+    assert written["feedback_id"] == feedback_id(RUN_ID, "evidence_found")
     assert written["source_info"]["checks_version"] == checks_version()
 
 
 def test_a_dry_run_writes_nothing():
     client = RecordingClient()
-    results = score_run(client, traced_run(ROUTED_SAR), dry_run=True)
+    results = score_run(client, traced_run(RETRIEVED_FOI), dry_run=True)
     assert results and not client.feedback

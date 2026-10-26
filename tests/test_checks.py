@@ -8,7 +8,6 @@ from foi_agent.checks import (
     draft_states_rights,
     evidence_found,
     exemption_sections_known,
-    regime_guidance_found,
     run_checks,
 )
 
@@ -25,7 +24,6 @@ def foi_run(assessment=None, draft=GOOD_DRAFT, **overrides):
     base = {
         "request": "Please send me the senior officer salaries for 2025/26.",
         "regime": "FOI",
-        "regime_guidance": [{"id": "REG-FOI", "source": "regime_guidance"}],
         "evidence": [
             {"id": "PS-003", "source": "publication_scheme", "url": PS_URL},
             {"id": "EX-S21", "source": "exemption_guidance"},
@@ -47,24 +45,17 @@ def foi_run(assessment=None, draft=GOOD_DRAFT, **overrides):
 ROUTED_SAR = {
     "request": "Send me everything you hold about me.",
     "regime": "SAR",
-    "regime_guidance": [{"id": "REG-SAR", "source": "regime_guidance"}],
     "action": "route",
     "draft": "We have passed your request to our Data Protection team.",
 }
 
 
 def test_a_clean_run_passes_every_check():
-    assert [r["score"] for r in run_checks(foi_run())] == [1] * 8
+    assert [r["score"] for r in run_checks(foi_run())] == [1] * 7
 
 
 def test_checks_that_need_an_foi_draft_or_assessment_do_not_apply_to_a_routed_sar():
-    scores = {r["key"]: r["score"] for r in run_checks(ROUTED_SAR)}
-    assert scores.pop("regime_guidance_found") == 1
-    assert set(scores.values()) == {None}
-
-
-def test_no_regime_guidance_fails():
-    assert regime_guidance_found(foi_run(regime_guidance=[]))["score"] == 0
+    assert {r["score"] for r in run_checks(ROUTED_SAR)} == {None}
 
 
 def test_evidence_check_does_not_apply_when_an_unclear_regime_escalated_before_retrieval():
@@ -72,7 +63,6 @@ def test_evidence_check_does_not_apply_when_an_unclear_regime_escalated_before_r
         "request": "My records, and your policy on housing banding.",
         "regime": "FOI",
         "regime_scores": {"FOI": 0.48, "SAR": 0.45, "EIR": 0.04, "BAU": 0.03},
-        "regime_guidance": [{"id": "REG-MIXED", "source": "regime_guidance"}],
         "action": "escalate",
         "escalation_reasons": ["Regime unclear: FOI 0.48, SAR 0.45."],
     }

@@ -21,3 +21,4 @@ var/
 # Claude Code skills (local dev tooling)
 skills-lock.json
 
+evals/results/
