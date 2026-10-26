@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "langchain",
-    "langchain-google-genai",
+    "langchain-openai",
     "langchain-typesafe==0.0.1a3",  # alpha: pinned, the API may change between releases
     "langgraph",
     "langsmith",

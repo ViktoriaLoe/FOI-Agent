@@ -3,8 +3,8 @@
     python -m evals.run_experiment --split dev [--slice published] [--limit 5]
                                    [--repetitions 2] [--no-judge] [--classify-only]
 
-Each FOI case makes two Gemini calls (assess and draft) and the judge one more, so start small.
-`--classify-only` runs just regime classification, which uses no Gemini at all.
+Each FOI case makes two OpenAI calls (assess and draft) and the judge one more, so start small.
+`--classify-only` runs just regime classification, which makes no OpenAI calls.
 
 The experiment records the git commit and the agent's run metadata (model, prompt version,
 corpus version), and a summary by category and slice is printed and saved to evals/results/.
@@ -60,7 +60,7 @@ def full_target(pause: float):
 
 
 def classify_target(inputs: dict) -> dict:
-    """Regime classification and the routing decision only: no Gemini calls."""
+    """Regime classification and the routing decision only: no OpenAI calls."""
     state = {"request": inputs["request"]}
     state |= nodes.retrieve_regime_guidance(state)
     state |= nodes.classify_regime(state)
@@ -144,7 +144,7 @@ def main() -> None:
         description=args.description,
         metadata=metadata,
         num_repetitions=args.repetitions,
-        max_concurrency=1,  # the Gemini free tier allows few requests a minute
+        max_concurrency=1,  # one request at a time, to stay within rate limits
     )
 
     summary = summarise(results, results.experiment_name)

@@ -23,7 +23,7 @@ from foi_agent.prompts import ASSESS_SYSTEM, DRAFT_SYSTEM, REGIME_CRITERIA, REGI
 from foi_agent.retrieval import search
 from foi_agent.state import Assessment, FOIState
 
-DEFAULT_MODEL = "google_genai:gemini-3.6-flash"
+DEFAULT_MODEL = "openai:gpt-6-luna"
 DEFAULT_CLASSIFIER_MODEL = "semif-qwen3.5-4b"
 GATEWAY_URL = "https://gateway.smith.langchain.com"
 EVIDENCE_SOURCES = ("disclosure_log", "publication_scheme", "exemption_guidance")
@@ -37,8 +37,7 @@ def model_name() -> str:
 @cache
 def _model():
     # Created on first use, so importing the graph doesn't need an API key.
-    # Gemini 3 models use fixed sampling, so there is no temperature to set. Overloaded models
-    # return 503s; fail within a couple of minutes and let the node's RetryPolicy try again.
+    # Fail within a couple of minutes and let the node's RetryPolicy try again.
     return init_chat_model(model_name(), max_retries=2, timeout=60)
 
 

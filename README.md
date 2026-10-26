@@ -8,7 +8,7 @@ It works out what kind of request has come in, routes anything that isn't FOI to
 
 - Python
 - LangGraph (LangGraph Studio for development)
-- Gemini 3.6 Flash on the Gemini API free tier for assessment and drafting (set `FOI_MODEL` to use another model)
+- OpenAI `gpt-6-luna` for assessment and drafting (set `FOI_MODEL` to use another model)
 - A decision model for regime classification, `semif-qwen3.5-4b` through `langchain-typesafe` and the LangSmith Gateway (set `FOI_CLASSIFIER_MODEL` to use another model)
 - BM25 retrieval (`rank-bm25`) over a small knowledge base
 - LangSmith for tracing and evaluation
@@ -35,7 +35,7 @@ pip install -e ".[dev]"
 Copy-Item .env.example .env
 ```
 
-Then add your API keys to `.env`: `GOOGLE_API_KEY` for Gemini, and `LANGSMITH_API_KEY`, which the regime classifier needs as well as tracing.
+Then add your API keys to `.env`: `OPENAI_API_KEY` for OpenAI, and `LANGSMITH_API_KEY`, which the regime classifier needs as well as tracing.
 
 Check the setup:
 
@@ -109,7 +109,7 @@ Every run carries metadata, so traces and experiments can be filtered and compar
 
 | Key | Value |
 | --- | --- |
-| `model` | The Gemini model in use (`FOI_MODEL`) |
+| `model` | The LLM in use for assessment and drafting (`FOI_MODEL`) |
 | `classifier_model` | The regime classifier's decision model (`FOI_CLASSIFIER_MODEL`) |
 | `prompt_version` | `PROMPT_VERSION` in [prompts.py](src/foi_agent/prompts.py), bumped whenever a prompt or the classifier's question changes |
 | `retriever`, `retrieval_k` | The retrieval method and the number of records taken from each source |
@@ -158,11 +158,11 @@ Run an experiment:
 
 ```bash
 python -m evals.run_experiment --split dev --limit 5      # a cheap first run
-python -m evals.run_experiment --split dev --classify-only # regime classification only, no Gemini calls
+python -m evals.run_experiment --split dev --classify-only # regime classification only, no OpenAI calls
 python -m evals.run_experiment --split dev --repetitions 2 # the full dev split, each example twice
 ```
 
-Each FOI case makes two Gemini calls, plus one for the judge (skip it with `--no-judge`). Use `--slice` to run one slice and `--pause` to space out requests on the free tier. Every experiment records the git commit and the agent's run metadata, and its summary by category and slice is saved to `evals/results/`.
+Each FOI case makes two OpenAI calls, plus one for the judge (skip it with `--no-judge`). Use `--slice` to run one slice and `--pause` to space out requests. Every experiment records the git commit and the agent's run metadata, and its summary by category and slice is saved to `evals/results/`.
 
 Each run is scored by three kinds of evaluator:
 
