@@ -1,0 +1,140 @@
+"""Evaluators that compare a run with the golden dataset's labels.
+
+Each takes `outputs` (the run's final state) and `reference_outputs` (the example's labels), the
+argument names LangSmith's `evaluate()` passes, and returns {"key", "score", "comment"}. Score 1
+is right and 0 is wrong. None means the example has no label for it, or the step it scores
+didn't run, so it doesn't count towards the average.
+"""
+
+from foi_agent.checks import section_number
+
+
+def _result(key: str, passed, comment: str = "") -> dict:
+    score = passed if passed is None or isinstance(passed, float) else int(passed)
+    return {"key": key, "score": score, "comment": comment}
+
+
+def _assessment(outputs: dict) -> dict | None:
+    return outputs.get("assessment") or None
+
+
+def regime_correct(outputs: dict, reference_outputs: dict) -> dict:
+    """The classifier's top regime matches the label."""
+    expected = reference_outputs.get("regime")
+    if expected is None:
+        return _result("regime_correct", None, "No regime label (mixed request).")
+    got = outputs.get("regime")
+    return _result("regime_correct", got == expected, f"Expected {expected}, got {got}.")
+
+
+def action_correct(outputs: dict, reference_outputs: dict) -> dict:
+    """The agent did what an officer would want: send, route, escalate or ask to clarify."""
+    expected, got = reference_outputs["action"], outputs.get("action")
+    return _result("action_correct", got == expected, f"Expected {expected}, got {got}.")
+
+
+def no_unsafe_send(outputs: dict, reference_outputs: dict) -> dict:
+    """The headline safety check: the agent never sent a reply an officer should have seen."""
+    expected, got = reference_outputs["action"], outputs.get("action")
+    unsafe = got == "send" and expected != "send"
+    return _result("no_unsafe_send", not unsafe, f"Sent, but should {expected}." if unsafe else "")
+
+
+def sends_when_expected(outputs: dict, reference_outputs: dict) -> dict:
+    """The cost of caution: when a signpost was safe to send, the agent sent it."""
+    if reference_outputs["action"] != "send":
+        return _result("sends_when_expected", None, "Not expected to send.")
+    got = outputs.get("action")
+    return _result("sends_when_expected", got == "send", f"Got {got}.")
+
+
+def decision_correct(outputs: dict, reference_outputs: dict) -> dict:
+    """The assessment's recommended decision matches the label."""
+    expected, assessment = reference_outputs.get("decision"), _assessment(outputs)
+    if expected is None or assessment is None:
+        return _result("decision_correct", None, "No decision label, or not assessed.")
+    got = assessment.get("recommended_decision")
+    return _result("decision_correct", got == expected, f"Expected {expected}, got {got}.")
+
+
+def published_match(outputs: dict, reference_outputs: dict) -> dict:
+    """The assessment identified the right published record, or rightly found none."""
+    assessment = _assessment(outputs)
+    if "published_id" not in reference_outputs or assessment is None:
+        return _result("published_match", None, "No published_id label, or not assessed.")
+    label = reference_outputs["published_id"]
+    expected = set(label) if isinstance(label, list) else {label} - {None}
+    got = assessment.get("published_id") if assessment.get("already_published") else None
+    passed = got in expected if expected else got is None
+    return _result("published_match", passed, f"Expected {sorted(expected) or None}, got {got}.")
+
+
+def _sections(sections) -> set[str]:
+    # s21 is how a signpost is made, and the decision and published_id already score that.
+    return {section_number(s) for s in sections} - {None, "21"}
+
+
+def exemption_recall(outputs: dict, reference_outputs: dict) -> dict:
+    """Of the exemptions an officer would consider, the share the assessment raised."""
+    assessment = _assessment(outputs)
+    if "exemptions" not in reference_outputs or assessment is None:
+        return _result("exemption_recall", None, "No exemptions label, or not assessed.")
+    expected = _sections(reference_outputs["exemptions"])
+    got = _sections(e.get("section", "") for e in assessment.get("exemptions") or [])
+    if not expected:
+        return _result("exemption_recall", None, "No exemption expected.")
+    missed = sorted(expected - got)
+    return _result(
+        "exemption_recall", len(expected & got) / len(expected), f"Missed: {', '.join(missed)}"
+    )
+
+
+def exemption_precision(outputs: dict, reference_outputs: dict) -> dict:
+    """Of the exemptions the assessment raised, the share an officer would consider."""
+    assessment = _assessment(outputs)
+    if "exemptions" not in reference_outputs or assessment is None:
+        return _result("exemption_precision", None, "No exemptions label, or not assessed.")
+    expected = _sections(reference_outputs["exemptions"])
+    got = _sections(e.get("section", "") for e in assessment.get("exemptions") or [])
+    if not got:
+        return _result("exemption_precision", None, "No exemption raised.")
+    extra = sorted(got - expected)
+    return _result(
+        "exemption_precision", len(expected & got) / len(got), f"Not expected: {', '.join(extra)}"
+    )
+
+
+def deadline_correct(outputs: dict, reference_outputs: dict) -> dict:
+    """The deadline matches the statutory one, bank holidays included."""
+    expected = reference_outputs.get("deadline")
+    if expected is None:
+        return _result("deadline_correct", None, "No deadline label.")
+    got = outputs.get("deadline")
+    comment = "No deadline computed." if got is None else f"Expected {expected}, got {got}."
+    return _result("deadline_correct", got == expected, comment)
+
+
+def retrieval_recall(outputs: dict, reference_outputs: dict) -> dict:
+    """Of the records a good search should find, the share evidence retrieval found."""
+    relevant = set(reference_outputs.get("relevant_ids") or [])
+    if not relevant or "evidence" not in outputs:
+        return _result("retrieval_recall", None, "No relevant_ids label, or retrieval didn't run.")
+    found = {doc["id"] for doc in outputs["evidence"]}
+    missed = sorted(relevant - found)
+    return _result(
+        "retrieval_recall", len(relevant & found) / len(relevant), f"Missed: {', '.join(missed)}"
+    )
+
+
+LABEL_EVALUATORS = (
+    regime_correct,
+    action_correct,
+    no_unsafe_send,
+    sends_when_expected,
+    decision_correct,
+    published_match,
+    exemption_recall,
+    exemption_precision,
+    deadline_correct,
+    retrieval_recall,
+)

@@ -93,15 +93,20 @@ def exemption_sections_known(outputs: dict) -> dict:
     """Assess: every exemption cited is a real FOIA section, not an invented or EIR one."""
     if not _is_foi_assessed(outputs):
         return _result("exemption_sections_known", None, "No assessment.")
-    unknown = []
-    for exemption in outputs["assessment"].get("exemptions") or []:
-        section = exemption.get("section", "")
-        match = re.fullmatch(
-            r"(?:s|section)\s*\.?\s*(\d+[A-Z]?)(\(.+\))?", section.strip(), re.IGNORECASE
-        )
-        if not match or match.group(1).upper() not in FOIA_SECTIONS:
-            unknown.append(section)
+    unknown = [
+        exemption.get("section", "")
+        for exemption in outputs["assessment"].get("exemptions") or []
+        if section_number(exemption.get("section", "")) not in FOIA_SECTIONS
+    ]
     return _result("exemption_sections_known", not unknown, f"Unrecognised: {', '.join(unknown)}")
+
+
+def section_number(section: str) -> str | None:
+    """The FOIA section in "s40", "s.40", "Section 40" or "s40(2)", as "40". None if not one."""
+    match = re.fullmatch(
+        r"(?:s|section)\s*\.?\s*(\d+[A-Z]?)(\(.+\))?", section.strip(), re.IGNORECASE
+    )
+    return match.group(1).upper() if match else None
 
 
 def _foi_draft(outputs: dict) -> str | None:

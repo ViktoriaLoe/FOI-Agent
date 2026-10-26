@@ -144,9 +144,35 @@ python evals/score_traces.py             # write them to LangSmith
 
 The script reads existing traces and makes no model calls. Running it again replaces earlier scores rather than adding to them. Each score records a `checks_version`, a hash of `checks.py`, so scores from changed checks can be told apart. The default project is `foi-agent-local`, where LangSmith files traces sent with the agent settings in `.env`. Use `--project` to score another project.
 
-## Evaluation dataset
+## Evaluation
 
 [evals/datasets/golden.jsonl](evals/datasets/golden.jsonl) holds 63 labelled requests covering normal cases, edge cases and high-risk failures. [evals/datasets/README.md](evals/datasets/README.md) explains the labels, what each slice tests, the known gaps and how the before and after are kept honest. `python -m pytest tests/test_golden_dataset.py` checks the labels for format errors and unknown ids.
+
+Upload the dataset to LangSmith as `foi-golden`. Running it again updates the examples instead of duplicating them:
+
+```bash
+python -m evals.upload_dataset
+```
+
+Run an experiment:
+
+```bash
+python -m evals.run_experiment --split dev --limit 5      # a cheap first run
+python -m evals.run_experiment --split dev --classify-only # regime classification only, no Gemini calls
+python -m evals.run_experiment --split dev --repetitions 2 # the full dev split, each example twice
+```
+
+Each FOI case makes two Gemini calls, plus one for the judge (skip it with `--no-judge`). Use `--slice` to run one slice and `--pause` to space out requests on the free tier. Every experiment records the git commit and the agent's run metadata, and its summary by category and slice is saved to `evals/results/`.
+
+Each run is scored by three kinds of evaluator:
+
+| Kind | Where | What it scores |
+| --- | --- | --- |
+| Code checks, no labels needed | [checks.py](src/foi_agent/checks.py) | Grounded citations, consistent assessments, links, personal data, the requester's rights (see [Checks](#checks)) |
+| Code compared with the labels | [evaluators.py](evals/evaluators.py) | `regime_correct`, `action_correct`, `no_unsafe_send`, `sends_when_expected`, `decision_correct`, `published_match`, `exemption_recall` and `exemption_precision`, `deadline_correct`, `retrieval_recall` |
+| LLM judge | [judge.py](evals/judge.py) | Whether the draft is right for the case, grounded in the evidence and clear. The model is set by `FOI_JUDGE_MODEL`, and defaults to the agent's model |
+
+`no_unsafe_send` is the headline: the agent must never send a reply an officer should have seen. `sends_when_expected` measures the cost of caution, because escalating a safe signpost wastes an officer's time.
 
 ## Knowledge base
 
