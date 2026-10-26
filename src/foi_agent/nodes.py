@@ -22,14 +22,21 @@ from foi_agent.prompts import ASSESS_SYSTEM, CLASSIFY_SYSTEM, DRAFT_SYSTEM
 from foi_agent.retrieval import search
 from foi_agent.state import Assessment, FOIState, RegimeDecision
 
-DEFAULT_MODEL = "google_genai:gemini-3.8-flash"
+DEFAULT_MODEL = "google_genai:gemini-3.6-flash"
 EVIDENCE_SOURCES = ("disclosure_log", "publication_scheme", "exemption_guidance")
+RETRIEVAL_K = 3  # records per source
+
+
+def model_name() -> str:
+    return os.environ.get("FOI_MODEL", DEFAULT_MODEL)
 
 
 @cache
 def _model():
     # Created on first use, so importing the graph doesn't need an API key.
-    return init_chat_model(os.environ.get("FOI_MODEL", DEFAULT_MODEL), temperature=0)
+    # Gemini 3 models use fixed sampling, so there is no temperature to set. Overloaded models
+    # return 503s; fail within a couple of minutes and let the node's RetryPolicy try again.
+    return init_chat_model(model_name(), max_retries=2, timeout=60)
 
 
 def format_docs(docs: list[dict]) -> str:
@@ -48,7 +55,7 @@ def format_docs(docs: list[dict]) -> str:
 
 
 def retrieve_regime_guidance(state: FOIState) -> dict:
-    return {"regime_guidance": search("regime_guidance", state["request"], k=3)}
+    return {"regime_guidance": search("regime_guidance", state["request"], k=RETRIEVAL_K)}
 
 
 def classify_regime(state: FOIState) -> dict:
@@ -65,7 +72,11 @@ def compute_deadline(state: FOIState) -> dict:
 
 def retrieve_evidence(state: FOIState) -> dict:
     # v1 searches with the raw request text.
-    evidence = [doc for source in EVIDENCE_SOURCES for doc in search(source, state["request"], k=3)]
+    evidence = [
+        doc
+        for source in EVIDENCE_SOURCES
+        for doc in search(source, state["request"], k=RETRIEVAL_K)
+    ]
     return {"evidence": evidence}
 
 

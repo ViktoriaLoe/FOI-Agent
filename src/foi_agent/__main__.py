@@ -57,9 +57,16 @@ def main() -> None:
 
     load_dotenv()
     graph = build_graph(checkpointer=InMemorySaver())
-    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    # Tag where the run came from; for sample files, record which line, so traces link back.
+    metadata = {"example": f"{args.file}:{args.line}"} if args.file else {}
+    config = {
+        "configurable": {"thread_id": str(uuid.uuid4())},
+        "tags": ["cli"],
+        "metadata": metadata,
+    }
 
     state = graph.invoke(inputs, config)
+    print(f"Case id (LangSmith thread): {config['configurable']['thread_id']}")
     if "__interrupt__" in state:
         if args.review:
             state = graph.invoke(Command(resume=args.review), config)

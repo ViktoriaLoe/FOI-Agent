@@ -8,9 +8,9 @@ It works out what kind of request has come in, routes anything that isn't FOI to
 
 - Python
 - LangGraph (LangGraph Studio for development)
-- Gemini Flash on the Gemini API free tier
+- Gemini 3.6 Flash on the Gemini API free tier (set `FOI_MODEL` to use another model)
+- BM25 retrieval (`rank-bm25`) over a small knowledge base
 - LangSmith for tracing and evaluation
-- HTMX for the officer review UI
 
 ## Quickstart
 
@@ -39,8 +39,30 @@ Then add your API keys to `.env`.
 Check the setup:
 
 ```bash
+pytest
 ruff check .
 ```
+
+## Run it
+
+One request from the command line. Escalated cases pause for officer review; add `--review approve` or `--review reject` to decide them:
+
+```bash
+python -m foi_agent "How much is the chief executive paid?" --received 2026-10-26
+python -m foi_agent --file examples/requests.jsonl --line 5
+```
+
+[examples/requests.jsonl](examples/requests.jsonl) holds sample requests, each with a note on the path it exercises.
+
+In LangGraph Studio:
+
+```bash
+langgraph dev
+```
+
+On Windows machines where the venv's `.exe` launchers are blocked, run `python -c "from langgraph_cli.cli import cli; cli()" dev` instead.
+
+Replies are written to `var/outbox/` and each case is appended to `var/case_log.jsonl`. Nothing is emailed. Set `FOI_OUTPUT_DIR` to write somewhere else.
 
 ## How it works
 
@@ -48,7 +70,9 @@ ruff check .
 flowchart TD
     A[Request received] --> B[retrieve_regime_guidance]
     B --> C[classify_regime]
-    C -->|SAR / business as usual / EIR| D[route_non_foi] --> Z[END]
+    C -->|SAR / business as usual / EIR| D[route_non_foi]
+    D -->|SAR / business as usual| K
+    D -->|EIR| J
     C -->|FOI| E[compute_deadline]
     E --> F[retrieve_evidence]
     F --> G[assess]
@@ -63,16 +87,47 @@ flowchart TD
 
 | Node | Type | What it does |
 | --- | --- | --- |
-| `retrieve_regime_guidance` | Retrieval | Searches ICO guidance using the request text |
+| `retrieve_regime_guidance` | Retrieval | Searches the ICO regime guidance using the request text |
 | `classify_regime` | Judgement (LLM) | FOI, EIR, SAR or business as usual |
-| `route_non_foi` | Deterministic | SAR and business as usual get a routed acknowledgement; EIR escalates |
-| `compute_deadline` | Deterministic | 20 working days from receipt |
-| `retrieve_evidence` | Retrieval | Searches the disclosure log and exemption guidance |
-| `assess` | Judgement (LLM) | Already published, too broad, exemptions, cost limit, recommended decision, cited sections |
-| `decide_action` | Deterministic | Escalation rule over the assessment |
-| `draft_reply` | Judgement (LLM) | Plain-English reply grounded in the cited sections |
+| `route_non_foi` | Deterministic | SAR and business as usual get a template acknowledgement naming the team it has gone to; EIR escalates |
+| `compute_deadline` | Deterministic | 20 working days, with day one the first working day after receipt. Skips weekends only, not bank holidays |
+| `retrieve_evidence` | Retrieval | Searches the disclosure log, publication scheme and exemption guidance using the request text |
+| `assess` | Judgement (LLM) | Already published (and where), possible exemptions, recommended decision, evidence relied on |
+| `decide_action` | Deterministic | Sends only a signpost to a retrieved publication scheme record or fully released disclosure log entry, with no exemption other than s21. Everything else escalates, with the reasons |
+| `draft_reply` | Judgement (LLM) | Plain-English reply grounded in the assessment and evidence |
 | `human_review` | Interrupt | Officer approves, edits or rejects escalated cases |
-| `log_and_send` | Deterministic | Appends to the case log and sends |
+| `log_and_send` | Deterministic | Writes the reply to the outbox and appends to the case log |
+
+## Observability
+
+Every run is traced to LangSmith when `LANGSMITH_TRACING=true`. A trace shows each node, every model call with its prompt and structured output, and each BM25 search as a retriever span listing the records it returned with their scores.
+
+Every run carries metadata, so traces and experiments can be filtered and compared:
+
+| Key | Value |
+| --- | --- |
+| `model` | The Gemini model in use (`FOI_MODEL`) |
+| `prompt_version` | `PROMPT_VERSION` in [prompts.py](src/foi_agent/prompts.py), bumped whenever a prompt changes |
+| `retriever`, `retrieval_k` | The retrieval method and the number of records taken from each source |
+| `corpus_version` | A hash of the knowledge base files, which changes whenever the data does |
+| `thread_id` | The case id, added by LangGraph |
+
+Runs from the command line are also tagged `cli`. Runs from the sample file record the line they came from as `example`.
+
+Traces store the request text in full, and real requests can contain personal data. That's acceptable for a prototype with invented requests, but a live deployment would need to mask inputs before they leave the council.
+
+## Knowledge base
+
+The council is fictional: Northbrook Borough Council. The knowledge base lives in [src/foi_agent/data/](src/foi_agent/data/):
+
+| File | Contents |
+| --- | --- |
+| `regime_guidance.json` | Summaries of ICO guidance on FOI, EIR, subject access, business as usual and mixed requests |
+| `exemption_guidance.json` | Summaries of ICO guidance on s12, s14, s21, s22, s31, s40, s41, s42 and s43 |
+| `disclosure_log.json` | Past FOI and EIR responses the council has published |
+| `publication_scheme.json` | Datasets the council publishes routinely, mostly under the Local Government Transparency Code |
+
+The ICO summaries contain public sector information licensed under the Open Government Licence v3.0. The disclosure log and publication scheme are invented.
 
 ## Why the agent is cautious
 

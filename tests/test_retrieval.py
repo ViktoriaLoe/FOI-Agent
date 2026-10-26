@@ -1,6 +1,6 @@
 import pytest
 
-from foi_agent.retrieval import SOURCES, load_records, search
+from foi_agent.retrieval import SOURCES, _as_trace_documents, load_records, search
 
 REQUIRED_FIELDS = {
     "regime_guidance": {"id", "title", "section", "test", "key_points"},
@@ -16,6 +16,21 @@ def test_senior_officer_salaries_finds_the_publication_scheme_record():
     assert results[0]["id"] == "PS-003"
     assert results[0]["source"] == "publication_scheme"
     assert results[0]["score"] > 0
+
+
+def test_hits_are_traced_as_retriever_documents():
+    hits = search("publication_scheme", "senior officer salaries", k=1)
+    [document] = _as_trace_documents(hits)["documents"]
+
+    assert document["type"] == "Document"
+    assert document["metadata"] == {
+        "id": "PS-003",
+        "source": "publication_scheme",
+        "score": hits[0]["score"],
+        "url": hits[0]["url"],
+    }
+    assert "Senior officer remuneration" in document["page_content"]
+    assert "publication_scheme" not in document["page_content"]
 
 
 def test_results_are_capped_at_k():

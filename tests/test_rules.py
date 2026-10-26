@@ -88,6 +88,24 @@ def test_exemptions_escalate_a_signpost():
     assert "s43" in result["escalation_reasons"][0]
 
 
+@pytest.mark.parametrize("section", ["s21", "s.21", "Section 21", "s21(1)"])
+def test_s21_does_not_hold_back_a_signpost(section):
+    state = signpost(exemptions=[{"section": section, "reason": "Already published"}])
+    assert decide_action(state) == {"action": "send", "escalation_reasons": []}
+
+
+def test_s21_alongside_another_exemption_still_escalates():
+    state = signpost(
+        exemptions=[
+            {"section": "s21", "reason": "Salaries are published"},
+            {"section": "s40", "reason": "Junior staff names"},
+        ]
+    )
+    result = decide_action(state)
+    assert result["action"] == "escalate"
+    assert result["escalation_reasons"] == ["Possible exemptions to consider: s40."]
+
+
 def test_published_id_not_retrieved_escalates():
     result = decide_action(signpost("PS-999"))
     assert result["action"] == "escalate"

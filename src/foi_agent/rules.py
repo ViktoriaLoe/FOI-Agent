@@ -3,6 +3,7 @@
 The model proposes and this code decides. Nothing here calls an LLM.
 """
 
+import re
 from typing import Literal
 
 from foi_agent.state import FOIState
@@ -56,6 +57,9 @@ def decide_action(state: FOIState) -> dict:
     assessment = state.get("assessment") or {}
     exemptions = assessment.get("exemptions") or []
     decision = assessment.get("recommended_decision")
+    if decision == "signpost":
+        # Signposting is how s21 is applied, so it doesn't hold the reply back.
+        exemptions = [e for e in exemptions if not _is_s21(e.get("section", ""))]
     reasons = []
 
     if decision != "signpost":
@@ -85,6 +89,11 @@ def decide_action(state: FOIState) -> dict:
             )
 
     return {"action": "escalate" if reasons else "send", "escalation_reasons": reasons}
+
+
+def _is_s21(section: str) -> bool:
+    """True for "s21", "s.21", "Section 21" or "s21(1)"."""
+    return re.fullmatch(r"(s|section)\s*\.?\s*21(\(\d+\))?", section.strip().lower()) is not None
 
 
 def route_by_action(state: FOIState) -> Literal["human_review", "log_and_send"]:

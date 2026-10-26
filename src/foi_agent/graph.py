@@ -4,7 +4,21 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
 
 from foi_agent import nodes, rules
+from foi_agent.prompts import PROMPT_VERSION
+from foi_agent.retrieval import corpus_version
 from foi_agent.state import FOIState, InputState
+
+
+def run_metadata() -> dict:
+    """What produced a run. Attached to every trace, so runs and experiments can be filtered
+    and compared by model, prompt version, retriever and knowledge base."""
+    return {
+        "model": nodes.model_name(),
+        "prompt_version": PROMPT_VERSION,
+        "retriever": "bm25",
+        "retrieval_k": nodes.RETRIEVAL_K,
+        "corpus_version": corpus_version(),
+    }
 
 
 def build_graph(checkpointer=None):
@@ -44,7 +58,8 @@ def build_graph(checkpointer=None):
     # human_review chooses its next step with Command, so it has no static edge out.
     builder.add_edge("log_and_send", END)
 
-    return builder.compile(checkpointer=checkpointer)
+    graph = builder.compile(checkpointer=checkpointer)
+    return graph.with_config({"run_name": "foi_triage", "metadata": run_metadata()})
 
 
 # For LangGraph Studio and `langgraph dev`, which supply their own checkpointer.
