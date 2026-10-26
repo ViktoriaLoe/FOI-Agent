@@ -1,0 +1,8 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "foi_agent": "./src/foi_agent/graph.py:graph"
+  },
+  "env": ".env",
+  "python_version": "3.11"
+}

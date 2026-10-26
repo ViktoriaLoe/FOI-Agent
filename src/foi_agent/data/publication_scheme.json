@@ -1,0 +1,134 @@
+{
+  "source": "Northbrook Borough Council publication scheme (fictional council)",
+  "licence": "Fictional data written for this project",
+  "records": [
+    {
+      "id": "PS-001",
+      "title": "Spending over £500",
+      "description": "Every payment to suppliers over £500, with date, supplier, amount, service area and purpose. Published under the Local Government Transparency Code.",
+      "period": "April 2020 to September 2026",
+      "frequency": "Monthly",
+      "url": "https://www.northbrook.example/transparency/spending-over-500"
+    },
+    {
+      "id": "PS-002",
+      "title": "Contracts register",
+      "description": "All contracts and tenders over £5,000: supplier, description, start and end dates, total value and procurement route. Published under the Local Government Transparency Code.",
+      "period": "Current to July–September 2026",
+      "frequency": "Quarterly",
+      "url": "https://www.northbrook.example/transparency/contracts-register"
+    },
+    {
+      "id": "PS-003",
+      "title": "Senior officer remuneration",
+      "description": "Names, job titles, salaries, bonuses and expenses of the chief executive and directors, and the number of staff paid over £50,000 in £5,000 salary bands. Published under the Local Government Transparency Code.",
+      "period": "2025/26",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/transparency/senior-salaries"
+    },
+    {
+      "id": "PS-004",
+      "title": "Pay policy statement",
+      "description": "The council's pay policy, including pay of chief officers, lowest-paid employees, and the ratio between the highest salary and the median salary.",
+      "period": "2026/27",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/council/pay-policy-statement"
+    },
+    {
+      "id": "PS-005",
+      "title": "Gender pay gap report",
+      "description": "Mean and median gender pay gap, bonus gap and the proportion of men and women in each pay quartile.",
+      "period": "Snapshot date 31 March 2025",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/council/gender-pay-gap"
+    },
+    {
+      "id": "PS-006",
+      "title": "Councillor allowances and expenses",
+      "description": "Basic and special responsibility allowances, travel and subsistence expenses paid to each councillor.",
+      "period": "2025/26",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/council/councillor-allowances"
+    },
+    {
+      "id": "PS-007",
+      "title": "Committee meetings, agendas, reports and minutes",
+      "description": "Agendas, reports, decisions and minutes for Full Council, Cabinet, Planning Committee, Licensing Committee and scrutiny committees.",
+      "period": "2010 to present",
+      "frequency": "Ongoing",
+      "url": "https://www.northbrook.example/council/meetings"
+    },
+    {
+      "id": "PS-008",
+      "title": "Statement of accounts",
+      "description": "Audited annual accounts, including officers' remuneration notes, the number of employees paid over £50,000 by band, exit packages and members' allowances.",
+      "period": "2024/25",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/council/statement-of-accounts"
+    },
+    {
+      "id": "PS-009",
+      "title": "Parking annual report",
+      "description": "Penalty charge notices issued, income from parking charges and fines, appeals and cancellations, and how any surplus was spent.",
+      "period": "2024/25",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/parking/annual-report"
+    },
+    {
+      "id": "PS-010",
+      "title": "Land and building assets register",
+      "description": "Every piece of land and every building the council owns or leases, with location, tenure and use. Published under the Local Government Transparency Code.",
+      "period": "As at 31 March 2026",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/transparency/land-and-assets"
+    },
+    {
+      "id": "PS-011",
+      "title": "Fraud data",
+      "description": "Number of counter-fraud staff, cost of counter-fraud work, number of fraud cases investigated and amount recovered. Published under the Local Government Transparency Code.",
+      "period": "2025/26",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/transparency/fraud"
+    },
+    {
+      "id": "PS-012",
+      "title": "Trade union facility time",
+      "description": "Number of union representatives, time spent on union duties and the cost as a percentage of the pay bill.",
+      "period": "2025/26",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/transparency/trade-union-facility-time"
+    },
+    {
+      "id": "PS-013",
+      "title": "Air quality annual status report",
+      "description": "Nitrogen dioxide and particulate monitoring results from every monitoring site in the borough, including diffusion tubes near the Riverside incinerator, and progress on the air quality action plan.",
+      "period": "2025 report covering 2024 data",
+      "frequency": "Annual",
+      "url": "https://www.northbrook.example/environment/air-quality-report"
+    },
+    {
+      "id": "PS-014",
+      "title": "Public register of HMO licences",
+      "description": "Licensed houses in multiple occupation: address, licence holder, number of occupants and licence dates.",
+      "period": "Current",
+      "frequency": "Updated weekly",
+      "url": "https://www.northbrook.example/housing/hmo-register"
+    },
+    {
+      "id": "PS-015",
+      "title": "Planning applications and decisions",
+      "description": "Planning applications, plans, consultation responses, officer reports and decision notices, searchable by address or reference.",
+      "period": "2004 to present",
+      "frequency": "Ongoing",
+      "url": "https://www.northbrook.example/planning/search"
+    },
+    {
+      "id": "PS-016",
+      "title": "Waste and recycling performance",
+      "description": "Household waste tonnages, recycling and composting rates, missed collections and fly-tipping incidents.",
+      "period": "2025/26",
+      "frequency": "Quarterly",
+      "url": "https://www.northbrook.example/environment/waste-performance"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "source": "Summaries of Information Commissioner's Office (ICO) guidance, ico.org.uk",
+  "licence": "Contains public sector information licensed under the Open Government Licence v3.0",
+  "records": [
+    {
+      "id": "EX-S12",
+      "section": "s12",
+      "title": "Cost of compliance exceeds the appropriate limit",
+      "test": "An authority does not have to comply if it estimates that determining whether it holds the information, and locating, retrieving and extracting it, would exceed the appropriate limit: £450 for local authorities, calculated at £25 per hour (18 hours).",
+      "key_points": [
+        "Time spent considering exemptions or redacting cannot be counted.",
+        "The estimate must be reasonable and based on evidence.",
+        "Under the section 16 duty to advise and assist, the authority should explain how the request could be narrowed to fall within the limit.",
+        "Typical triggers are requests for all emails or all documents on a topic over many years, or information that would need searching manually across many files."
+      ]
+    },
+    {
+      "id": "EX-S14",
+      "section": "s14",
+      "title": "Vexatious and repeated requests",
+      "test": "Section 14(1): an authority does not have to comply with a vexatious request, one likely to cause a disproportionate or unjustified level of disruption, irritation or distress. Section 14(2): it need not comply with a request identical or substantially similar to a previous request from the same person unless a reasonable interval has passed.",
+      "key_points": [
+        "The focus is on the request, not the requester, although the history and context can be taken into account.",
+        "Abusive or threatening language, unreasonable persistence and lack of serious purpose are indicators.",
+        "There is no public interest test."
+      ]
+    },
+    {
+      "id": "EX-S21",
+      "section": "s21",
+      "title": "Information reasonably accessible to the applicant by other means",
+      "test": "Absolute exemption for information already reasonably accessible to the requester, for example published on the authority's website or through its publication scheme.",
+      "key_points": [
+        "Give a precise link or directions so the requester can find the information without difficulty.",
+        "The published information must actually answer the request, including the time period asked for. If it only partly answers it, the rest must be dealt with.",
+        "Information that is only available on request is not reasonably accessible."
+      ]
+    },
+    {
+      "id": "EX-S22",
+      "section": "s22",
+      "title": "Information intended for future publication",
+      "test": "Qualified exemption where, at the time of the request, the authority has a settled intention to publish the information at a future date and it is reasonable to withhold it until then.",
+      "key_points": [
+        "The intention to publish must exist when the request is received.",
+        "A public interest test applies.",
+        "Common examples are reports, statistics and accounts that are due to be published."
+      ]
+    },
+    {
+      "id": "EX-S31",
+      "section": "s31",
+      "title": "Law enforcement",
+      "test": "Qualified exemption where disclosure would, or would be likely to, prejudice the prevention or detection of crime, the apprehension or prosecution of offenders, or the authority's regulatory and enforcement functions.",
+      "key_points": [
+        "Councils often consider it for CCTV camera locations, fraud detection methods, lists of empty properties and cyber security details.",
+        "The prejudice must be real and significant, and a public interest test applies."
+      ]
+    },
+    {
+      "id": "EX-S40",
+      "section": "s40",
+      "title": "Personal information",
+      "test": "Section 40(1): the requester's own personal data is absolutely exempt and handled as a subject access request. Section 40(2): third-party personal data is exempt if disclosure would breach the data protection principles, usually assessed through the legitimate interests test.",
+      "key_points": [
+        "Senior staff in public-facing roles have a greater expectation that their names, roles and salary bands may be disclosed than junior staff.",
+        "Exact salaries of named junior employees, sickness records, disciplinary details and information about service users are normally withheld.",
+        "Small numbers in statistics can identify individuals. Councils often suppress figures below five.",
+        "Information about people who have died is not personal data, but other exemptions such as s41 may apply."
+      ]
+    },
+    {
+      "id": "EX-S41",
+      "section": "s41",
+      "title": "Information provided in confidence",
+      "test": "Absolute exemption for information obtained from another person where disclosure would be an actionable breach of confidence.",
+      "key_points": [
+        "The information must have come from a third party, have the necessary quality of confidence and have been given in circumstances creating an obligation of confidence.",
+        "The terms of a contract agreed between the authority and a supplier are not usually treated as obtained from another person."
+      ]
+    },
+    {
+      "id": "EX-S42",
+      "section": "s42",
+      "title": "Legal professional privilege",
+      "test": "Qualified exemption for information covered by legal professional privilege, such as confidential legal advice to the authority.",
+      "key_points": [
+        "There is a strong inherent public interest in protecting legal privilege."
+      ]
+    },
+    {
+      "id": "EX-S43",
+      "section": "s43",
+      "title": "Commercial interests",
+      "test": "Section 43(2): qualified exemption where disclosure would, or would be likely to, prejudice the commercial interests of any person, including the authority itself.",
+      "key_points": [
+        "Commonly considered for contract pricing, unit rates, tender bids and supplier information.",
+        "The prejudice must be specific and evidenced. It is usually weaker once a procurement has finished.",
+        "The public interest in transparency of public spending often favours disclosing contract values."
+      ]
+    }
+  ]
+}

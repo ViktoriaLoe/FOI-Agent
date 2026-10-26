@@ -1,0 +1,366 @@
+{
+  "source": "Northbrook Borough Council FOI and EIR disclosure log (fictional council)",
+  "licence": "Fictional data written for this project",
+  "records": [
+    {
+      "id": "DL-2025-001",
+      "date": "2025-04-22",
+      "regime": "FOI",
+      "title": "Electric scooter seizures 2024/25",
+      "summary": "Asked how many privately owned e-scooters the council seized in 2024/25 and what happened to them. Not held: seizing e-scooters ridden on public roads is a police matter, so the requester was advised to contact the police.",
+      "outcome": "not held",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-001"
+    },
+    {
+      "id": "DL-2025-002",
+      "date": "2025-05-08",
+      "regime": "FOI",
+      "title": "Public space CCTV camera locations",
+      "summary": "Asked for the location of every CCTV camera the council operates, including redeployable cameras used for fly-tipping and anti-social behaviour, as at April 2025. Refused under section 31 because publishing camera locations would help offenders avoid detection and prejudice the prevention of crime.",
+      "outcome": "refused",
+      "exemptions": ["s31"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-002"
+    },
+    {
+      "id": "DL-2025-003",
+      "date": "2025-05-20",
+      "regime": "FOI",
+      "title": "Agency staff expenditure 2024/25",
+      "summary": "Asked for total spend on agency workers in 2024/25 by directorate, the agencies used and the number of agency workers engaged at 31 March 2025. Released in full: £6.8 million in total, mostly in Children's Services and Adult Social Care, supplied mainly through Stellmarsh Recruitment Ltd under a managed service contract.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-003"
+    },
+    {
+      "id": "DL-2025-004",
+      "date": "2025-06-03",
+      "regime": "EIR",
+      "title": "Fly-tipping incidents and enforcement 2024/25",
+      "summary": "Asked for the number of fly-tipping incidents reported in 2024/25, the cost of clearing them, and the fixed penalty notices and prosecutions that followed. Released in full: 2,412 incidents, clearance costs of £318,000, 96 fixed penalty notices and 7 prosecutions.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-004"
+    },
+    {
+      "id": "DL-2025-005",
+      "date": "2025-06-17",
+      "regime": "FOI",
+      "title": "Highway maintenance: pothole repairs and vehicle damage claims 2024/25",
+      "summary": "Asked how many potholes were repaired on council-maintained roads in 2024/25, what the repairs cost, and how many vehicle damage claims were received and paid. Released in full: 5,930 potholes repaired at a cost of £1.27 million; 412 damage claims received and 61 paid, totalling £38,450.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-005"
+    },
+    {
+      "id": "DL-2025-006",
+      "date": "2025-07-01",
+      "regime": "FOI",
+      "title": "Consultancy expenditure 2024/25",
+      "summary": "Asked for total spend on external consultants in 2024/25, the ten firms paid the most and what each was engaged to do. Released in full: £2.1 million in total; the largest suppliers were Marlowgate Consulting LLP for the transformation programme and Pennock Hale Advisory for the housing revenue account business plan review.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-006"
+    },
+    {
+      "id": "DL-2025-007",
+      "date": "2025-07-15",
+      "regime": "FOI",
+      "title": "Penalty charge notices and parking income 2024/25",
+      "summary": "Asked for the number of penalty charge notices (PCNs) issued in 2024/25 by contravention code, the ten streets with the most PCNs, and income from parking charges and fines. Released in full: 38,214 PCNs and £4.9 million total parking income. The headline totals are also in the Parking annual report 2024/25.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-007"
+    },
+    {
+      "id": "DL-2025-008",
+      "date": "2025-07-29",
+      "regime": "FOI",
+      "title": "Agency social workers in Children's Services",
+      "summary": "Asked how many children's social worker posts were filled by agency staff at 31 March 2025, the vacancy rate and the cost of agency social workers in 2024/25. Released in full: 41 of 128 posts were filled by agency social workers, the vacancy rate was 24% and the cost was £4.2 million.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-008"
+    },
+    {
+      "id": "DL-2025-009",
+      "date": "2025-08-12",
+      "regime": "FOI",
+      "title": "Empty residential properties list",
+      "summary": "Asked for the addresses of all empty residential properties in the borough, with owner names and how long each had been empty, as at July 2025. Refused under section 31 because publishing the list would help criminals target empty homes for squatting, theft and property fraud.",
+      "outcome": "refused",
+      "exemptions": ["s31"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-009"
+    },
+    {
+      "id": "DL-2025-010",
+      "date": "2025-08-26",
+      "regime": "FOI",
+      "title": "SEND Tribunal appeals 2023 and 2024",
+      "summary": "Asked how many appeals were lodged with the First-tier Tribunal (Special Educational Needs and Disability) against the council in calendar years 2023 and 2024, how many were decided in the family's favour and the council's legal costs. Released in full: 87 appeals in 2023 and 112 in 2024, 94% of decided appeals found wholly or partly for the family, and external legal costs of £146,000 across both years.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-010"
+    },
+    {
+      "id": "DL-2025-011",
+      "date": "2025-09-09",
+      "regime": "FOI",
+      "title": "Leisure management contract",
+      "summary": "Asked for a copy of the leisure management contract with Corvane Leisure Services Ltd for the council's three leisure centres, including the pricing schedule. Part released: the contract and its total value of £14.6 million over ten years were released, but the unit rates and the breakdown of the management fee were redacted under section 43 because disclosure would prejudice the contractor's commercial interests.",
+      "outcome": "part released",
+      "exemptions": ["s43"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-011"
+    },
+    {
+      "id": "DL-2025-012",
+      "date": "2025-09-23",
+      "regime": "FOI",
+      "title": "Pest control call-outs 2024/25",
+      "summary": "Asked how many pest control call-outs the council attended in 2024/25 by type of pest, and what it charges. Released in full: 1,846 call-outs, of which 1,102 were for rats, 389 for wasps and 214 for mice; rat treatments at homes are free and a wasp nest treatment costs £72.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-012"
+    },
+    {
+      "id": "DL-2025-013",
+      "date": "2025-10-07",
+      "regime": "FOI",
+      "title": "Staff sickness absence 2024/25",
+      "summary": "Asked for the average number of working days lost to sickness per employee in 2024/25, by directorate and by team, and the main reasons for absence. Part released: directorate averages and the main reasons were released, but figures for teams where fewer than five employees were absent were suppressed under section 40 because they could reveal individuals' health information.",
+      "outcome": "part released",
+      "exemptions": ["s40"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-013"
+    },
+    {
+      "id": "DL-2025-014",
+      "date": "2025-10-21",
+      "regime": "FOI",
+      "title": "Business rates accounts in credit",
+      "summary": "Asked for a list of business rates accounts with a credit balance, giving the account holder, property address and amount, as at September 2025. Refused under section 31 because publishing the list would expose the council and ratepayers to fraudulent refund claims.",
+      "outcome": "refused",
+      "exemptions": ["s31"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-014"
+    },
+    {
+      "id": "DL-2025-015",
+      "date": "2025-11-04",
+      "regime": "FOI",
+      "title": "ICT systems and software contracts",
+      "summary": "Asked which software systems the council uses for its main services, with the supplier, contract end date and annual cost of each. Released in full: a list of 23 systems, including the revenues and benefits system from Ardwell Systems Ltd, the housing management system from Brackenridge Software Ltd and Microsoft 365, with contract end dates up to 2029.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-015"
+    },
+    {
+      "id": "DL-2025-016",
+      "date": "2025-11-18",
+      "regime": "EIR",
+      "title": "Street tree removals on Larkhill Avenue",
+      "summary": "Asked why the council felled eleven street trees on Larkhill Avenue in October 2025, for the arboricultural survey and for any consultation with residents. Part released: the tree condition survey, the felling decision and the replanting plan were released, but the names and addresses of residents who had complained were withheld under regulation 13 (personal data).",
+      "outcome": "part released",
+      "exemptions": ["reg 13"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-016"
+    },
+    {
+      "id": "DL-2025-017",
+      "date": "2025-12-02",
+      "regime": "FOI",
+      "title": "Translation and interpreting expenditure 2024/25",
+      "summary": "Asked how much the council spent on translation and interpreting services in 2024/25, which languages were most requested and which suppliers were used. Released in full: £187,000, mostly in Children's Services and Housing; the most requested languages were Polish, Romanian, Urdu and Arabic, and the main supplier was Linguavale Ltd.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-017"
+    },
+    {
+      "id": "DL-2025-018",
+      "date": "2025-12-16",
+      "regime": "FOI",
+      "title": "Cyber security incidents and ransomware",
+      "summary": "Asked how many cyber attacks the council experienced from 2022 to 2025, whether it had suffered a ransomware attack or paid a ransom, and which security products and suppliers it uses. Part released: the council confirmed it has not suffered a successful ransomware attack and has never paid a ransom, but the number and type of attempted attacks and details of its security products were withheld under section 31 because they would help attackers.",
+      "outcome": "part released",
+      "exemptions": ["s31"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2025-018"
+    },
+    {
+      "id": "DL-2026-001",
+      "date": "2026-01-13",
+      "regime": "FOI",
+      "title": "Library visits and active borrowers 2023/24 and 2024/25",
+      "summary": "Asked for the number of visits to each council library and the number of active borrowers in 2023/24 and 2024/25. Released in full: total visits rose from 612,000 to 648,000, with Central Library accounting for about 40%.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-001"
+    },
+    {
+      "id": "DL-2026-002",
+      "date": "2026-01-27",
+      "regime": "FOI",
+      "title": "Home to school transport for pupils with SEND 2025/26",
+      "summary": "Asked how many children with special educational needs and disabilities (SEND) receive council-funded home to school transport in the 2025/26 academic year, the budgeted cost and the number of taxi and minibus routes. Released in full: 1,064 pupils on 412 routes at a budgeted cost of £11.3 million, plus 138 families receiving personal travel budgets.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-002"
+    },
+    {
+      "id": "DL-2026-003",
+      "date": "2026-02-10",
+      "regime": "FOI",
+      "title": "Use of artificial intelligence tools and Microsoft Copilot licences",
+      "summary": "Asked whether the council uses artificial intelligence (AI) tools, how many Microsoft 365 Copilot licences it holds and their cost, and for its AI policy. Released in full: 350 Copilot licences costing £94,500 a year as at January 2026, a pilot of an AI transcription tool in Adult Social Care, and the council's generative AI acceptable use policy.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-003"
+    },
+    {
+      "id": "DL-2026-004",
+      "date": "2026-02-24",
+      "regime": "FOI",
+      "title": "Northbrook Leisure Centre options appraisal",
+      "summary": "Asked for the options appraisal on the future of Northbrook Leisure Centre, including the costs of closure, refurbishment and rebuilding. Refused under section 22 because the appraisal was due to be published with the Cabinet report for 18 March 2026; contractor cost estimates were also withheld under section 43 because the procurement was still open.",
+      "outcome": "refused",
+      "exemptions": ["s22", "s43"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-004"
+    },
+    {
+      "id": "DL-2026-005",
+      "date": "2026-03-10",
+      "regime": "FOI",
+      "title": "Planning department staff names, job titles and salaries",
+      "summary": "Asked for the names, job titles and exact salaries of everyone working in Planning and Building Control as at February 2026. Part released: the names and job titles of the Head of Planning and the three team leaders were released, with job titles and salary bands for all other posts; junior staff names and all exact salaries were withheld under section 40.",
+      "outcome": "part released",
+      "exemptions": ["s40"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-005"
+    },
+    {
+      "id": "DL-2026-006",
+      "date": "2026-03-24",
+      "regime": "FOI",
+      "title": "Emails about the closure of Northbrook Leisure Centre 2015 to 2026",
+      "summary": "Asked for every email sent or received by councillors and officers mentioning the closure of Northbrook Leisure Centre from January 2015 to March 2026. Refused under section 12 because a search returned over 9,000 emails and reviewing them would far exceed the 18-hour cost limit; the requester was advised to narrow the request to a shorter period, named officers or the Cabinet decision of March 2026.",
+      "outcome": "refused",
+      "exemptions": ["s12"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-006"
+    },
+    {
+      "id": "DL-2026-007",
+      "date": "2026-04-14",
+      "regime": "FOI",
+      "title": "Legal advice and legal costs: Northbrook Leisure Centre closure",
+      "summary": "Asked for the legal advice the council received on closing Northbrook Leisure Centre and how much it cost. Part released: external legal costs of £23,600 in 2025/26 were released, but the advice itself was withheld under section 42 (legal professional privilege).",
+      "outcome": "part released",
+      "exemptions": ["s42"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-007"
+    },
+    {
+      "id": "DL-2026-008",
+      "date": "2026-04-28",
+      "regime": "FOI",
+      "title": "Temporary accommodation: households and cost 2025/26",
+      "summary": "Asked how many households were in temporary accommodation at 31 March 2026, how many included children and how many were in bed and breakfast, and the total cost in 2025/26. Released in full: 486 households, 312 with children and 37 in bed and breakfast, at a provisional net cost of £9.7 million.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-008"
+    },
+    {
+      "id": "DL-2026-009",
+      "date": "2026-05-12",
+      "regime": "FOI",
+      "title": "Repeated request: planning department staff salaries",
+      "summary": "The same requester asked again for the names and exact salaries of all Planning and Building Control staff, five weeks after the council answered a substantially similar request (DL-2026-005). Refused under section 14(2) as a repeated request because no reasonable interval had passed and nothing had changed; the requester was reminded of the right to an internal review of the original response.",
+      "outcome": "refused",
+      "exemptions": ["s14"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-009"
+    },
+    {
+      "id": "DL-2026-010",
+      "date": "2026-05-26",
+      "regime": "FOI",
+      "title": "Damp and mould reports in council housing 2025/26",
+      "summary": "Asked how many damp and mould reports council tenants made in 2025/26, how many were assessed as category 1 hazards, the average time to complete repairs, and how many were investigated within the Awaab's Law timescales after 27 October 2025. Released in full: 1,318 reports, 74 category 1 hazards and an average of 34 days to complete repairs; 92% of reports after 27 October 2025 were investigated within the required timescale.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-010"
+    },
+    {
+      "id": "DL-2026-011",
+      "date": "2026-06-09",
+      "regime": "EIR",
+      "title": "Market Square town centre regeneration: correspondence with Tallowmere Developments Ltd",
+      "summary": "Asked for all correspondence between the council and Tallowmere Developments Ltd about the Market Square town centre regeneration scheme from January 2025 to April 2026. Part released: 214 emails and meeting notes were released, but the developer's viability assessment and land valuation figures were withheld under regulation 12(5)(e) (commercial confidentiality) and legal advice on the development agreement under regulation 12(5)(b) (course of justice).",
+      "outcome": "part released",
+      "exemptions": ["reg 12(5)(e)", "reg 12(5)(b)"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-011"
+    },
+    {
+      "id": "DL-2026-012",
+      "date": "2026-06-23",
+      "regime": "FOI",
+      "title": "Council tax arrears and enforcement agents 2025/26",
+      "summary": "Asked for total council tax arrears at 31 March 2026, the number of liability orders obtained and the number of accounts passed to enforcement agents (bailiffs) in 2025/26. Released in full: arrears of £8.9 million, 6,210 liability orders and 3,875 accounts passed to Quillford Enforcement Ltd.",
+      "outcome": "released",
+      "exemptions": [],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-012"
+    },
+    {
+      "id": "DL-2026-013",
+      "date": "2026-07-07",
+      "regime": "FOI",
+      "title": "Councillor allowances and expenses 2025/26",
+      "summary": "Asked for the basic allowance, special responsibility allowances and expenses paid to each councillor in 2025/26. Refused under section 21 because the information is published in the Councillor allowances and expenses dataset (PS-006) in the council's publication scheme, and the requester was given the link.",
+      "outcome": "refused",
+      "exemptions": ["s21"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-013"
+    },
+    {
+      "id": "DL-2026-014",
+      "date": "2026-07-21",
+      "regime": "FOI",
+      "title": "Senior officer remuneration 2025/26",
+      "summary": "Asked for the names, job titles and salaries of the chief executive and directors, including bonuses and expenses, for 2025/26. Refused under section 21 because the information is published in the Senior officer remuneration dataset (PS-003) in the council's publication scheme, and the requester was given the link.",
+      "outcome": "refused",
+      "exemptions": ["s21"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-014"
+    },
+    {
+      "id": "DL-2026-015",
+      "date": "2026-08-04",
+      "regime": "EIR",
+      "title": "Air quality monitoring near the Riverside incinerator",
+      "summary": "Asked for nitrogen dioxide and particulate readings from monitoring sites near the Riverside incinerator, and the number of smoke and odour complaints about it, for 2024 and 2025. Part released: the complaint figures (23 in 2024 and 18 in 2025) were released and the requester was directed to the 2024 monitoring results in the Air quality annual status report (PS-013) under regulation 6(1)(b); 2025 monitoring data had not yet been ratified and was withheld under regulation 12(4)(d) until the next report.",
+      "outcome": "part released",
+      "exemptions": ["reg 6(1)(b)", "reg 12(4)(d)"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-015"
+    },
+    {
+      "id": "DL-2026-016",
+      "date": "2026-08-18",
+      "regime": "FOI",
+      "title": "Employees paid over £100,000 in 2024/25 and 2025/26",
+      "summary": "Asked how many council employees were paid over £100,000 in 2024/25 and 2025/26, and their job titles. Refused under section 21 because the numbers in £5,000 salary bands and senior officers' job titles are published in the Senior officer remuneration dataset (PS-003) for 2025/26 and in the officers' remuneration note of the Statement of accounts (PS-008) for 2024/25.",
+      "outcome": "refused",
+      "exemptions": ["s21"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-016"
+    },
+    {
+      "id": "DL-2026-017",
+      "date": "2026-09-01",
+      "regime": "FOI",
+      "title": "Register of licensed houses in multiple occupation",
+      "summary": "Asked for a list of all licensed houses in multiple occupation (HMOs) in the borough with addresses, licence holders and licence expiry dates. Refused under section 21 because the information is in the Public register of HMO licences (PS-014), which is updated weekly on the council's website.",
+      "outcome": "refused",
+      "exemptions": ["s21"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-017"
+    },
+    {
+      "id": "DL-2026-018",
+      "date": "2026-09-15",
+      "regime": "FOI",
+      "title": "Public health funerals 2025/26",
+      "summary": "Asked how many public health funerals the council arranged in 2025/26 under section 46 of the Public Health (Control of Disease) Act 1984, the total cost, and the name, date of death and estate value of each person. Part released: 58 funerals at a total cost of £79,400, but names and estate details were withheld under section 31 because publishing them could help fraudulent claims on the estates.",
+      "outcome": "part released",
+      "exemptions": ["s31"],
+      "url": "https://www.northbrook.example/foi/disclosure-log/DL-2026-018"
+    }
+  ]
+}

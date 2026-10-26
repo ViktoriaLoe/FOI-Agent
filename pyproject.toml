@@ -1,0 +1,38 @@
+[project]
+name = "foi-agent"
+version = "0.1.0"
+description = "Triage agent for Freedom of Information requests to a UK council"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain",
+    "langchain-google-genai",
+    "langgraph",
+    "langsmith",
+    "python-dotenv",
+    "rank-bm25",
+]
+
+[project.optional-dependencies]
+dev = [
+    "langgraph-cli[inmem]",
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+foi_agent = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]

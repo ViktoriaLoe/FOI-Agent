@@ -8,8 +8,39 @@ It works out what kind of request has come in, routes anything that isn't FOI to
 
 - Python
 - LangGraph (LangGraph Studio for development)
+- Gemini Flash on the Gemini API free tier
 - LangSmith for tracing and evaluation
 - HTMX for the officer review UI
+
+## Quickstart
+
+Requires Python 3.11 or later.
+
+macOS / Linux:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env
+```
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+Copy-Item .env.example .env
+```
+
+Then add your API keys to `.env`.
+
+Check the setup:
+
+```bash
+ruff check .
+```
 
 ## How it works
 

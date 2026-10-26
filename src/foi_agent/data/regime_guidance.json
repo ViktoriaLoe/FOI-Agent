@@ -1,0 +1,66 @@
+{
+  "source": "Summaries of Information Commissioner's Office (ICO) guidance, ico.org.uk",
+  "licence": "Contains public sector information licensed under the Open Government Licence v3.0",
+  "records": [
+    {
+      "id": "REG-FOI",
+      "title": "Freedom of Information Act 2000: what counts as a request",
+      "section": "FOIA s1, s8",
+      "test": "Any written request for recorded information held by a public authority, giving the requester's name and an address for correspondence and describing the information wanted.",
+      "key_points": [
+        "The requester does not have to mention the Act or explain why they want the information.",
+        "Requests are applicant and motive blind: disclosure under FOI is treated as disclosure to the world at large.",
+        "The authority must say whether it holds the information and, unless an exemption applies, provide it.",
+        "Respond promptly and within 20 working days of receipt."
+      ]
+    },
+    {
+      "id": "REG-EIR",
+      "title": "Environmental Information Regulations 2004: what is environmental information",
+      "section": "EIR regulation 2(1)",
+      "test": "Information on the state of the elements of the environment (air, water, soil, land, landscape, biodiversity), on factors affecting them (energy, noise, radiation, waste, emissions), and on measures such as policies, plans, programmes and activities affecting them or designed to protect them.",
+      "key_points": [
+        "Planning applications and development, roads and traffic schemes, waste collection and recycling, fly-tipping, air quality, pollution, flooding, trees and green spaces, contaminated land and energy use are usually environmental information.",
+        "Environmental information must be handled under the EIR, not FOIA. FOIA section 39 exempts it.",
+        "EIR requests can be made verbally as well as in writing.",
+        "The EIR use exceptions instead of exemptions, all subject to a presumption in favour of disclosure.",
+        "The time limit is 20 working days, extendable to 40 for complex and voluminous requests."
+      ]
+    },
+    {
+      "id": "REG-SAR",
+      "title": "Right of access: subject access requests under the UK GDPR",
+      "section": "UK GDPR Article 15; FOIA s40(1)",
+      "test": "A request by an individual for their own personal data is a subject access request and is handled under data protection law, not FOI.",
+      "key_points": [
+        "FOIA section 40(1) is an absolute exemption for the requester's own personal data, so it must not be disclosed under FOI.",
+        "The requester does not need to say 'subject access request'. Asking what the council holds about them, or for their records, case file or correspondence about them, is enough.",
+        "Respond within one calendar month. The authority may need to verify the requester's identity.",
+        "Requests for a family member's records need authority to act on that person's behalf.",
+        "Disclosure under FOI is to the world at large, so treating a subject access request as FOI risks publishing someone's personal data."
+      ]
+    },
+    {
+      "id": "REG-BAU",
+      "title": "Routine requests and business as usual",
+      "section": "FOIA s1",
+      "test": "Everyday enquiries and service requests that the authority deals with in the normal course of business, such as reporting a problem, requesting a service, making a complaint or asking for routine information.",
+      "key_points": [
+        "A request to fix a problem, book a service or make a complaint is not a request for recorded information and does not need an FOI response.",
+        "Routine enquiries, such as opening hours or how to apply for a permit, can be answered as normal business.",
+        "If the requester relies on FOI, or exemptions may need to be considered, handle the request formally under FOIA."
+      ]
+    },
+    {
+      "id": "REG-MIXED",
+      "title": "Requests that cover more than one regime",
+      "section": "FOIA, EIR, UK GDPR",
+      "test": "A single request can cover information under different regimes, for example the requester's own personal data alongside general information, or environmental information alongside other information.",
+      "key_points": [
+        "Each part must be handled under the correct regime, with its own time limit.",
+        "The requester's own personal data is handled as a subject access request even if the rest of the request is FOI.",
+        "Environmental parts are handled under the EIR."
+      ]
+    }
+  ]
+}

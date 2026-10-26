@@ -1,4 +1,4 @@
-docs/*
+docs/
 
 # Secrets
 .env
@@ -12,3 +12,12 @@ __pycache__/
 
 # LangGraph dev server
 .langgraph_api/
+
+# Case log and outbox written by the agent
+var/
+
+.claude/    
+
+# Claude Code skills (local dev tooling)
+skills-lock.json
+
