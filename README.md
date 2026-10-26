@@ -93,7 +93,7 @@ flowchart TD
 | `retrieve_regime_guidance` | Retrieval | Searches the ICO regime guidance using the request text |
 | `classify_regime` | Judgement (decision model) | FOI, EIR, SAR or business as usual, with a probability for each |
 | `route_non_foi` | Deterministic | SAR and business as usual get a template acknowledgement naming the team it has gone to; EIR escalates. If the top regime's probability is below `REGIME_MIN_PROB` (0.6, uncalibrated), the regime is unclear and the case escalates, FOI included |
-| `compute_deadline` | Deterministic | 20 working days, with day one the first working day after receipt. Skips weekends only, not bank holidays |
+| `compute_deadline` | Deterministic | 20 working days, with day one the first working day after receipt. Skips weekends and bank holidays in any part of the UK (FOIA s10(6)) |
 | `retrieve_evidence` | Retrieval | Searches the disclosure log, publication scheme and exemption guidance using the request text |
 | `assess` | Judgement (LLM) | Already published (and where), possible exemptions, recommended decision, evidence relied on |
 | `decide_action` | Deterministic | Sends only a signpost to a retrieved publication scheme record or fully released disclosure log entry, with no exemption other than s21. Everything else escalates, with the reasons |
@@ -184,6 +184,7 @@ The council is fictional: Northbrook Borough Council. The knowledge base lives i
 | `exemption_guidance.json` | Summaries of ICO guidance on s12, s14, s21, s22, s31, s40, s41, s42 and s43 |
 | `disclosure_log.json` | Past FOI and EIR responses the council has published |
 | `publication_scheme.json` | Datasets the council publishes routinely, mostly under the Local Government Transparency Code |
+| `bank_holidays.json` | UK bank holidays for England and Wales, Scotland and Northern Ireland, 2019 to 2028, from [gov.uk](https://www.gov.uk/bank-holidays.json), used by the deadline |
 
 The ICO summaries contain public sector information licensed under the Open Government Licence v3.0. The disclosure log and publication scheme are invented.
 

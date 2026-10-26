@@ -41,6 +41,6 @@ A field is left out when it doesn't apply, and its evaluator skips that example.
 ## Keeping the before and after honest
 
 - **Labels came first.** They were drafted before the agent was run on any example, and the dataset is committed before the baseline.
-- **Known gaps are declared.** When the dataset was written, v1 had no `clarify` or `not_held` outcome (6 examples, marked `known_gap`), and its deadline skipped weekends only (34 examples, tagged `bank_holiday`). Fixing these counts as closing a known gap, not as something the evals found. The bank-holiday share isn't inflated: across a real year, 65% of requests have a deadline that a weekends-only count gets wrong.
+- **Known gaps are declared.** When the dataset was written, v1 had no `clarify` or `not_held` outcome (6 examples, marked `known_gap`), and its deadline skipped weekends only (34 examples, tagged `bank_holiday`). Fixing these counts as closing a known gap, not as something the evals found. The deadline was fixed before the baseline, so the `bank_holiday` tag now just marks the examples that test it. The bank-holiday share isn't inflated: across a real year, 65% of requests have a deadline that a weekends-only count gets wrong.
 - **Test stays held out.** Changes are made against `dev` (42 examples). `test` (21) runs at baseline and at the end only.
 - **Every result is reported**, regressions included. A label changes only to fix a mistake, and the change is noted here.
