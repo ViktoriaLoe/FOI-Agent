@@ -1,6 +1,13 @@
 import pytest
 
-from foi_agent.rules import SIGN_OFF, decide_action, route_by_action, route_by_regime, route_non_foi
+from foi_agent.rules import (
+    REGIME_MIN_PROB,
+    SIGN_OFF,
+    decide_action,
+    route_by_action,
+    route_by_regime,
+    route_non_foi,
+)
 
 PS_003 = {"source": "publication_scheme", "id": "PS-003", "title": "Senior officer remuneration"}
 EX_S40 = {"source": "exemption_guidance", "id": "EX-S40", "title": "Personal information"}
@@ -31,6 +38,48 @@ def signpost(published_id="PS-003", **overrides):
 )
 def test_route_by_regime(regime, branch):
     assert route_by_regime({"regime": regime}) == branch
+
+
+def classified(regime, scores):
+    """State after classify_regime: the top label and the distribution."""
+    return {"regime": regime, "regime_scores": scores}
+
+
+CLEAR_FOI = classified("FOI", {"FOI": 0.91, "EIR": 0.05, "SAR": 0.03, "BAU": 0.01})
+UNCLEAR_FOI = classified("FOI", {"FOI": 0.48, "SAR": 0.41, "EIR": 0.06, "BAU": 0.05})
+CLEAR_SAR = classified("SAR", {"SAR": 0.88, "FOI": 0.10, "EIR": 0.01, "BAU": 0.01})
+UNCLEAR_SAR = classified("SAR", {"SAR": 0.45, "BAU": 0.30, "FOI": 0.20, "EIR": 0.05})
+CLEAR_BAU = classified("BAU", {"BAU": 0.95, "FOI": 0.03, "SAR": 0.01, "EIR": 0.01})
+
+
+def test_clear_foi_continues_to_foi_work():
+    assert route_by_regime(CLEAR_FOI) == "compute_deadline"
+
+
+def test_foi_exactly_at_the_threshold_continues():
+    state = classified("FOI", {"FOI": REGIME_MIN_PROB, "SAR": 1 - REGIME_MIN_PROB})
+    assert route_by_regime(state) == "compute_deadline"
+
+
+def test_unclear_foi_leaves_before_foi_work_and_escalates():
+    assert route_by_regime(UNCLEAR_FOI) == "route_non_foi"
+    assert route_non_foi(UNCLEAR_FOI) == {
+        "action": "escalate",
+        "escalation_reasons": ["Regime unclear: FOI 0.48, SAR 0.41."],
+    }
+
+
+@pytest.mark.parametrize("state", [CLEAR_SAR, CLEAR_BAU])
+def test_clear_sar_and_bau_are_routed(state):
+    assert route_by_regime(state) == "route_non_foi"
+    assert route_non_foi(state)["action"] == "route"
+
+
+def test_unclear_sar_escalates_instead_of_routing():
+    result = route_non_foi(UNCLEAR_SAR)
+    assert result["action"] == "escalate"
+    assert result["escalation_reasons"] == ["Regime unclear: SAR 0.45, BAU 0.30."]
+    assert "draft" not in result
 
 
 def test_sar_is_routed_to_data_protection():

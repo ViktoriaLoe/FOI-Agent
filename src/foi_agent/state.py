@@ -1,4 +1,4 @@
-"""Graph state and the structured outputs the LLM nodes return.
+"""Graph state and the structured output the assess node returns.
 
 State holds plain JSON-serialisable values, so model outputs are stored with `.model_dump()`.
 """
@@ -11,22 +11,6 @@ from typing_extensions import TypedDict
 Regime = Literal["FOI", "EIR", "SAR", "BAU"]
 Decision = Literal["provide", "signpost", "part_refuse", "refuse"]
 Action = Literal["send", "escalate", "route"]
-
-
-class RegimeDecision(BaseModel):
-    """Which access regime the request falls under."""
-
-    regime: Regime = Field(
-        description=(
-            "FOI for a request for recorded information under the Freedom of Information Act; "
-            "EIR if the information requested is environmental; SAR if the requester is asking "
-            "for their own personal data; BAU for a service request, complaint or routine "
-            "enquiry that is not a request for recorded information."
-        )
-    )
-    reason: str = Field(
-        description="One or two sentences explaining the choice, citing the guidance relied on."
-    )
 
 
 class Exemption(BaseModel):
@@ -85,7 +69,7 @@ class FOIState(InputState, total=False):
 
     regime_guidance: list[dict]
     regime: Regime
-    regime_reason: str
+    regime_scores: dict[str, float]  # the classifier's probability for each regime
     deadline: str  # ISO date
     evidence: list[dict]
     assessment: dict

@@ -5,7 +5,7 @@ A triage agent for Freedom of Information requests to a UK council, built as a L
 ## Design rules
 
 - Build with plain LangGraph pieces: `StateGraph`, nodes, edges and `interrupt`.
-- Judgement nodes call the LLM and return structured output. Routing and the escalate-or-send rule are deterministic code.
+- Judgement nodes call a model and return structured output: a decision model for the regime, the LLM for the rest. Routing, the escalate-or-send rule and the regime threshold are deterministic code.
 - Regime classification runs first. Non-FOI requests leave the graph before any FOI work.
 - The agent sends on its own only in low-risk cases. When in doubt it escalates to an FOI officer.
 

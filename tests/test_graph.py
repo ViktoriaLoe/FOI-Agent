@@ -3,8 +3,14 @@
 import json
 import uuid
 
+import httpx2
 import pytest
 from langchain_core.callbacks import BaseCallbackHandler
+from langchain_typesafe.client import (
+    TypeSafeAuthenticationError,
+    TypeSafeBadRequestError,
+    TypeSafeInternalServerError,
+)
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
@@ -33,9 +39,10 @@ def run(monkeypatch, tmp_path):
     """A function that builds the graph with fake LLM nodes returning the given outputs."""
     monkeypatch.setenv("FOI_OUTPUT_DIR", str(tmp_path))
 
-    def build(regime, fake_assessment=None):
+    def build(regime, fake_assessment=None, regime_scores=None):
+        scores = regime_scores or {regime: 0.9}
         monkeypatch.setattr(
-            nodes, "classify_regime", lambda state: {"regime": regime, "regime_reason": "Fake."}
+            nodes, "classify_regime", lambda state: {"regime": regime, "regime_scores": scores}
         )
         monkeypatch.setattr(nodes, "assess", lambda state: {"assessment": fake_assessment})
         monkeypatch.setattr(nodes, "draft_reply", lambda state: {"draft": "Fake draft reply."})
@@ -140,6 +147,7 @@ def test_every_step_is_traced_with_run_metadata(run):
         assert metadata["prompt_version"] == PROMPT_VERSION
         assert metadata["corpus_version"] == corpus_version()
         assert metadata["model"] == nodes.model_name()
+        assert metadata["classifier_model"] == nodes.classifier_model_name()
         assert metadata["thread_id"] == cfg["configurable"]["thread_id"]
         assert "test" in recorder.steps[step]["tags"]
 
@@ -151,3 +159,35 @@ def test_eir_waits_for_review(run):
     assert graph.get_state(cfg).next == ("human_review",)
     payload = result["__interrupt__"][0].value
     assert payload["escalation_reasons"] == ["Environmental information: handle under the EIR."]
+
+
+def test_unclear_foi_waits_for_review_before_any_foi_work(run):
+    scores = {"FOI": 0.48, "SAR": 0.41, "EIR": 0.06, "BAU": 0.05}
+    graph, cfg = run("FOI", regime_scores=scores), config()
+    result = graph.invoke({"request": "Send me the notes on my housing banding decision."}, cfg)
+
+    assert graph.get_state(cfg).next == ("human_review",)
+    assert "deadline" not in result
+    payload = result["__interrupt__"][0].value
+    assert payload["escalation_reasons"] == ["Regime unclear: FOI 0.48, SAR 0.41."]
+
+
+@pytest.mark.parametrize(
+    ("error", "calls"),
+    [
+        (TypeSafeBadRequestError(400, None, httpx2.Headers()), 1),
+        (TypeSafeAuthenticationError(401, None, httpx2.Headers()), 1),
+        (TypeSafeInternalServerError(503, None, httpx2.Headers()), 3),
+    ],
+)
+def test_classifier_retries_only_server_errors(monkeypatch, error, calls):
+    attempts = []
+
+    def failing_classify(state):
+        attempts.append(1)
+        raise error
+
+    monkeypatch.setattr(nodes, "classify_regime", failing_classify)
+    with pytest.raises(type(error)):
+        build_graph().invoke({"request": SALARIES_REQUEST})
+    assert len(attempts) == calls

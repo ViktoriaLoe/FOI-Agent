@@ -8,7 +8,8 @@ It works out what kind of request has come in, routes anything that isn't FOI to
 
 - Python
 - LangGraph (LangGraph Studio for development)
-- Gemini 3.6 Flash on the Gemini API free tier (set `FOI_MODEL` to use another model)
+- Gemini 3.6 Flash on the Gemini API free tier for assessment and drafting (set `FOI_MODEL` to use another model)
+- A decision model for regime classification, `semif-qwen3.5-4b` through `langchain-typesafe` and the LangSmith Gateway (set `FOI_CLASSIFIER_MODEL` to use another model)
 - BM25 retrieval (`rank-bm25`) over a small knowledge base
 - LangSmith for tracing and evaluation
 
@@ -34,7 +35,7 @@ pip install -e ".[dev]"
 Copy-Item .env.example .env
 ```
 
-Then add your API keys to `.env`.
+Then add your API keys to `.env`: `GOOGLE_API_KEY` for Gemini, and `LANGSMITH_API_KEY`, which the regime classifier needs as well as tracing.
 
 Check the setup:
 
@@ -70,10 +71,10 @@ Replies are written to `var/outbox/` and each case is appended to `var/case_log.
 flowchart TD
     A[Request received] --> B[retrieve_regime_guidance]
     B --> C[classify_regime]
-    C -->|SAR / business as usual / EIR| D[route_non_foi]
+    C -->|SAR / business as usual / EIR / unclear| D[route_non_foi]
     D -->|SAR / business as usual| K
-    D -->|EIR| J
-    C -->|FOI| E[compute_deadline]
+    D -->|EIR / unclear| J
+    C -->|clear FOI| E[compute_deadline]
     E --> F[retrieve_evidence]
     F --> G[assess]
     G --> H[decide_action]
@@ -88,8 +89,8 @@ flowchart TD
 | Node | Type | What it does |
 | --- | --- | --- |
 | `retrieve_regime_guidance` | Retrieval | Searches the ICO regime guidance using the request text |
-| `classify_regime` | Judgement (LLM) | FOI, EIR, SAR or business as usual |
-| `route_non_foi` | Deterministic | SAR and business as usual get a template acknowledgement naming the team it has gone to; EIR escalates |
+| `classify_regime` | Judgement (decision model) | FOI, EIR, SAR or business as usual, with a probability for each |
+| `route_non_foi` | Deterministic | SAR and business as usual get a template acknowledgement naming the team it has gone to; EIR escalates. If the top regime's probability is below `REGIME_MIN_PROB` (0.6, uncalibrated), the regime is unclear and the case escalates, FOI included |
 | `compute_deadline` | Deterministic | 20 working days, with day one the first working day after receipt. Skips weekends only, not bank holidays |
 | `retrieve_evidence` | Retrieval | Searches the disclosure log, publication scheme and exemption guidance using the request text |
 | `assess` | Judgement (LLM) | Already published (and where), possible exemptions, recommended decision, evidence relied on |
@@ -107,7 +108,8 @@ Every run carries metadata, so traces and experiments can be filtered and compar
 | Key | Value |
 | --- | --- |
 | `model` | The Gemini model in use (`FOI_MODEL`) |
-| `prompt_version` | `PROMPT_VERSION` in [prompts.py](src/foi_agent/prompts.py), bumped whenever a prompt changes |
+| `classifier_model` | The regime classifier's decision model (`FOI_CLASSIFIER_MODEL`) |
+| `prompt_version` | `PROMPT_VERSION` in [prompts.py](src/foi_agent/prompts.py), bumped whenever a prompt or the classifier's question changes |
 | `retriever`, `retrieval_k` | The retrieval method and the number of records taken from each source |
 | `corpus_version` | A hash of the knowledge base files, which changes whenever the data does |
 | `thread_id` | The case id, added by LangGraph |
@@ -115,6 +117,30 @@ Every run carries metadata, so traces and experiments can be filtered and compar
 Runs from the command line are also tagged `cli`. Runs from the sample file record the line they came from as `example`.
 
 Traces store the request text in full, and real requests can contain personal data. That's acceptable for a prototype with invented requests, but a live deployment would need to mask inputs before they leave the council.
+
+## Checks
+
+[checks.py](src/foi_agent/checks.py) holds code checks that score a finished run without needing labels. Each one takes the run's final state as `outputs`, so it can be used as a LangSmith evaluator or applied to traced runs. A check that doesn't apply to a run, such as draft checks on a routed SAR, scores `None`.
+
+| Check | Step | Fails when |
+| --- | --- | --- |
+| `regime_guidance_found` | Retrieve regime guidance | No guidance was retrieved for the classifier |
+| `evidence_found` | Retrieve evidence | An FOI case found no published record or past response |
+| `citations_grounded` | Assess | The assessment cites an id that wasn't retrieved |
+| `assessment_consistent` | Assess | The decision contradicts its own fields, for example a signpost that isn't marked as published |
+| `exemption_sections_known` | Assess | An exemption isn't a real FOIA section |
+| `draft_links_grounded` | Draft reply | The reply links to a URL that isn't in the evidence and isn't the council's or the ICO's |
+| `draft_states_rights` | Draft reply | The reply doesn't mention internal review and the ICO |
+| `draft_no_new_personal_data` | Draft reply | The reply contains an email address, phone number, National Insurance number or postcode that wasn't in the request, other than the council's or the ICO's |
+
+To score traced runs and attach the results to them in LangSmith as feedback:
+
+```bash
+python evals/score_traces.py --dry-run   # print scores only
+python evals/score_traces.py             # write them to LangSmith
+```
+
+The script reads existing traces and makes no model calls. Running it again replaces earlier scores rather than adding to them. Each score records a `checks_version`, a hash of `checks.py`, so scores from changed checks can be told apart. The default project is `foi-agent-local`, where LangSmith files traces sent with the agent settings in `.env`. Use `--project` to score another project.
 
 ## Knowledge base
 
@@ -131,4 +157,4 @@ The ICO summaries contain public sector information licensed under the Open Gove
 
 ## Why the agent is cautious
 
-The costly mistakes are the ones that can't be undone once a reply is sent. A Subject Access Request answered as FOI effectively publishes someone's personal data, and a wrong refusal or disclosure can lead to an ICO complaint. So the agent classifies the regime first, keeps the send/escalate decision as a plain rule rather than an LLM call, and defaults to escalating.
+The costly mistakes are the ones that can't be undone once a reply is sent. A Subject Access Request answered as FOI effectively publishes someone's personal data, and a wrong refusal or disclosure can lead to an ICO complaint. So the agent classifies the regime first, escalates when no regime is clearly ahead, keeps the send/escalate decision as a plain rule rather than an LLM call, and defaults to escalating.

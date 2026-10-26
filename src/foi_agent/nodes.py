@@ -1,4 +1,4 @@
-"""Graph nodes: retrieval, the LLM judgement nodes, the deadline, officer review and sending.
+"""Graph nodes: retrieval, the judgement nodes, the deadline, officer review and sending.
 
 The deterministic routing and escalation rule live in `foi_agent.rules`.
 """
@@ -14,15 +14,18 @@ from typing import Literal
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_typesafe import Choice, TypeSafeClassifier
 from langgraph.graph import END
 from langgraph.types import Command, interrupt
 
 from foi_agent.deadline import foi_deadline
-from foi_agent.prompts import ASSESS_SYSTEM, CLASSIFY_SYSTEM, DRAFT_SYSTEM
+from foi_agent.prompts import ASSESS_SYSTEM, DRAFT_SYSTEM, REGIME_CRITERIA, REGIME_INSTRUCTIONS
 from foi_agent.retrieval import search
-from foi_agent.state import Assessment, FOIState, RegimeDecision
+from foi_agent.state import Assessment, FOIState
 
 DEFAULT_MODEL = "google_genai:gemini-3.6-flash"
+DEFAULT_CLASSIFIER_MODEL = "semif-qwen3.5-4b"
+GATEWAY_URL = "https://gateway.smith.langchain.com"
 EVIDENCE_SOURCES = ("disclosure_log", "publication_scheme", "exemption_guidance")
 RETRIEVAL_K = 3  # records per source
 
@@ -37,6 +40,21 @@ def _model():
     # Gemini 3 models use fixed sampling, so there is no temperature to set. Overloaded models
     # return 503s; fail within a couple of minutes and let the node's RetryPolicy try again.
     return init_chat_model(model_name(), max_retries=2, timeout=60)
+
+
+def classifier_model_name() -> str:
+    return os.environ.get("FOI_CLASSIFIER_MODEL", DEFAULT_CLASSIFIER_MODEL)
+
+
+@cache
+def _classifier() -> TypeSafeClassifier:
+    # The decision model for regime classification, served by the LangSmith Gateway, which takes
+    # a LangSmith key. Created on first use, like _model().
+    return TypeSafeClassifier(
+        model=classifier_model_name(),
+        api_key=os.environ["LANGSMITH_API_KEY"],
+        base_url=GATEWAY_URL,
+    )
 
 
 def format_docs(docs: list[dict]) -> str:
@@ -59,10 +77,23 @@ def retrieve_regime_guidance(state: FOIState) -> dict:
 
 
 def classify_regime(state: FOIState) -> dict:
-    system = CLASSIFY_SYSTEM.format(guidance=format_docs(state.get("regime_guidance") or []))
-    model = _model().with_structured_output(RegimeDecision)
-    decision = model.invoke([SystemMessage(system), HumanMessage(state["request"])])
-    return {"regime": decision.regime, "regime_reason": decision.reason}
+    """Ask the decision model which regime applies.
+
+    Keeps the whole distribution, so the routing rule can escalate when no regime is clearly ahead.
+    """
+    response = _classifier().invoke(
+        {
+            "state": {
+                "request": state["request"],
+                "ico_guidance": format_docs(state.get("regime_guidance") or []),
+            },
+            "questions": {
+                "regime": Choice(instructions=REGIME_INSTRUCTIONS, criteria=REGIME_CRITERIA)
+            },
+        }
+    )
+    answer = response.choices["regime"]
+    return {"regime": answer.choice, "regime_scores": dict(answer.probabilities)}
 
 
 def compute_deadline(state: FOIState) -> dict:

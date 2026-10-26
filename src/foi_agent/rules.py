@@ -29,16 +29,39 @@ _ROUTED_REPLIES = {
 }
 
 # Only these sources record information the council has actually published.
-_PUBLISHED_SOURCES = {"disclosure_log", "publication_scheme"}
+PUBLISHED_SOURCES = {"disclosure_log", "publication_scheme"}
+
+# Below this probability for the top regime, the regime is unclear and the case escalates.
+# A placeholder until it is calibrated against labelled examples on the classifier model in use.
+REGIME_MIN_PROB = 0.6
+
+
+def _regime_unclear(state: FOIState) -> bool:
+    """True if the classifier's top regime is below REGIME_MIN_PROB.
+
+    With no scores (a caller that sets only `regime`), there is nothing to doubt.
+    """
+    scores = state.get("regime_scores")
+    return bool(scores) and max(scores.values()) < REGIME_MIN_PROB
+
+
+def _unclear_reason(state: FOIState) -> str:
+    """Name the two most likely regimes, as in "Regime unclear: FOI 0.48, SAR 0.41"."""
+    top = sorted(state["regime_scores"].items(), key=lambda item: item[1], reverse=True)[:2]
+    return "Regime unclear: " + ", ".join(f"{label} {p:.2f}" for label, p in top) + "."
 
 
 def route_by_regime(state: FOIState) -> Literal["compute_deadline", "route_non_foi"]:
-    """FOI continues to FOI work. Everything else leaves before it."""
-    return "compute_deadline" if state.get("regime") == "FOI" else "route_non_foi"
+    """Clear FOI continues to FOI work. Everything else, unclear FOI included, leaves before it."""
+    if state.get("regime") == "FOI" and not _regime_unclear(state):
+        return "compute_deadline"
+    return "route_non_foi"
 
 
 def route_non_foi(state: FOIState) -> dict:
-    """Acknowledge SAR and business-as-usual requests; escalate EIR."""
+    """Acknowledge SAR and business-as-usual requests; escalate EIR and unclear regimes."""
+    if _regime_unclear(state):
+        return {"action": "escalate", "escalation_reasons": [_unclear_reason(state)]}
     regime = state.get("regime")
     if regime in _ROUTED_REPLIES:
         return {"action": "route", "draft": _ROUTED_REPLIES[regime]}
@@ -78,7 +101,7 @@ def decide_action(state: FOIState) -> dict:
             reasons.append("The assessment did not identify where the information is published.")
         elif doc is None:
             reasons.append(f"Published source {published_id} is not among the retrieved evidence.")
-        elif doc["source"] not in _PUBLISHED_SOURCES:
+        elif doc["source"] not in PUBLISHED_SOURCES:
             reasons.append(
                 f"Published source {published_id} is guidance, not a published dataset or response."
             )

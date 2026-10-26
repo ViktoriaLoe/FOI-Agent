@@ -26,7 +26,9 @@ def _read_line(path: str, number: int) -> dict:
 
 def _print_state(state: dict) -> None:
     print(f"Regime:     {state.get('regime')}")
-    print(f"Reason:     {state.get('regime_reason')}")
+    scores = state.get("regime_scores") or {}
+    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    print(f"Scores:     {', '.join(f'{label} {p:.2f}' for label, p in ranked)}")
     print(f"Deadline:   {state.get('deadline')}")
     print(f"Assessment: {json.dumps(state.get('assessment'), indent=2)}")
     print(f"Action:     {state.get('action')}")

@@ -1,5 +1,6 @@
 """The FOI triage graph. See README.md for the flow."""
 
+from langchain_typesafe.client import TypeSafeAPIConnectionError, TypeSafeInternalServerError
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
 
@@ -14,6 +15,7 @@ def run_metadata() -> dict:
     and compared by model, prompt version, retriever and knowledge base."""
     return {
         "model": nodes.model_name(),
+        "classifier_model": nodes.classifier_model_name(),
         "prompt_version": PROMPT_VERSION,
         "retriever": "bm25",
         "retrieval_k": nodes.RETRIEVAL_K,
@@ -27,10 +29,15 @@ def build_graph(checkpointer=None):
     Nodes are looked up through their modules at build time, so tests can monkeypatch them.
     """
     llm_retry = RetryPolicy(max_attempts=3)
+    # The default policy retries every TypeSafe error, so a bad key, an unknown model or a rate
+    # limit would be sent three times. Retry only server errors, dropped connections and timeouts.
+    classifier_retry = RetryPolicy(
+        max_attempts=3, retry_on=(TypeSafeInternalServerError, TypeSafeAPIConnectionError)
+    )
     builder = StateGraph(FOIState, input_schema=InputState)
 
     builder.add_node("retrieve_regime_guidance", nodes.retrieve_regime_guidance)
-    builder.add_node("classify_regime", nodes.classify_regime, retry_policy=llm_retry)
+    builder.add_node("classify_regime", nodes.classify_regime, retry_policy=classifier_retry)
     builder.add_node("route_non_foi", rules.route_non_foi)
     builder.add_node("compute_deadline", nodes.compute_deadline)
     builder.add_node("retrieve_evidence", nodes.retrieve_evidence)

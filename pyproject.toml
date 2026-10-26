@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "langchain",
     "langchain-google-genai",
+    "langchain-typesafe==0.0.1a3",  # alpha: pinned, the API may change between releases
     "langgraph",
     "langsmith",
     "python-dotenv",
@@ -32,7 +33,8 @@ foi_agent = ["data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # so tests can import evals/
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "evals"]
