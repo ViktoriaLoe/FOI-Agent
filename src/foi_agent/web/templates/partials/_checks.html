@@ -1,0 +1,21 @@
+{# Label-free code checks from foi_agent.checks on the run's state. ctx: case #}
+{% from "partials/_macros.html" import section %}
+{% set passed = case.checks|selectattr('score', 'equalto', 1)|list|length %}
+{% set failed = case.checks|selectattr('score', 'equalto', 0)|list|length %}
+{% set na = case.checks|selectattr('score', 'none')|list|length %}
+{% set marks = {'pass': '✓', 'fail': '✕', 'na': '–'} %}
+{% set words = {'pass': 'pass', 'fail': 'fail', 'na': 'does not apply'} %}
+{% call section('Checks', kind='rule', node='checks.py', meta=passed ~ ' pass · ' ~ failed ~ ' fail · ' ~ na ~ ' n.a.', class='checks-sect' ~ (' checks-sect--fail' if failed else '')) %}
+  <ul class="checks">
+    {% for check in case.checks %}
+    {% set state = 'na' if check.score is none else ('pass' if check.score == 1 else 'fail') %}
+    <li class="check check--{{ state }}"{% if check.comment and state != 'fail' %} title="{{ check.comment }}"{% endif %}>
+      <span class="check__mark" aria-hidden="true">{{ marks[state] }}</span>
+      <span class="check__label">{{ check.label }}<span class="visually-hidden">: {{ words[state] }}</span></span>
+      <span class="check__step">{{ check.step }}</span>
+      {% if state == 'fail' and check.comment %}<span class="check__comment">{{ check.comment }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="note">Code checks on the finished run. They need no labels, so they can score any run; n.a. means the check doesn’t apply, such as draft checks on a routed SAR.</p>
+{% endcall %}

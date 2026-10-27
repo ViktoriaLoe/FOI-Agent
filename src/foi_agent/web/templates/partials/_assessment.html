@@ -1,0 +1,35 @@
+{# The LLM's assessment. Only FOI cases that reached `assess` have one. ctx: case #}
+{% from "partials/_macros.html" import section %}
+{% set a = case.assessment %}
+{% call section('Assessment', kind='model', node='assess') %}
+  <p class="lead">{{ a.decision_label }}</p>
+  <dl class="facts">
+    <div>
+      <dt>Already published</dt>
+      <dd>{% if a.already_published %}Yes{% if a.published_id %}, at <code>{{ a.published_id }}</code>{% endif %}{% else %}No{% endif %}</dd>
+    </div>
+    <div>
+      <dt>Evidence relied on</dt>
+      <dd>
+        {%- for doc in a.cited %}<code title="{{ doc.title }}">{{ doc.id }}</code>{% if not loop.last %}, {% endif %}{% else %}None cited{% endfor -%}
+      </dd>
+    </div>
+    <div class="facts__wide">
+      <dt>Possible exemptions</dt>
+      <dd>
+        {% if a.exemptions %}
+        <ul class="exemptions">
+          {% for exemption in a.exemptions %}
+          <li><code class="exemptions__section">{{ exemption.section }}</code> <span>{{ exemption.reason }}</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}None flagged{% endif %}
+      </dd>
+    </div>
+  </dl>
+
+  <details class="disclosure">
+    <summary>The model’s reasoning</summary>
+    <p class="prose prose--reasoning">{{ a.reasoning }}</p>
+  </details>
+{% endcall %}

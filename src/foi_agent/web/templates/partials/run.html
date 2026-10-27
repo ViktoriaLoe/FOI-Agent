@@ -1,0 +1,36 @@
+{% if live %}
+<div class="run" hx-ext="sse" sse-connect="/cases/{{ case.id }}/stream" sse-close="done">
+  <section class="sect" aria-labelledby="path-title">
+    <header class="sect__head">
+      <h2 class="sect__title" id="path-title">Path through the graph</h2>
+      <p class="sect__meta"><code>case {{ case.short_id }}</code></p>
+    </header>
+    <div class="sect__body">
+      <div id="pipeline" sse-swap="pipeline">
+        {% include "partials/pipeline.html" %}
+      </div>
+    </div>
+  </section>
+  <div id="result" sse-swap="done" aria-live="polite">
+    <p class="running-note"><span class="pulse" aria-hidden="true"></span>Running… the result appears when the graph stops.</p>
+  </div>
+</div>
+{% else %}
+<div class="run">
+  <section class="sect" aria-labelledby="path-title">
+    <header class="sect__head">
+      <h2 class="sect__title" id="path-title">Path through the graph</h2>
+      <p class="sect__meta replay-note" title="The saved state from the last live run of this example. Nothing ran again and no model was called.">Replayed · ran {{ case.replayed_at_display }}</p>
+      <p class="sect__meta">Saved state; no model calls</p>
+    </header>
+    <div class="sect__body">
+      <div id="pipeline">
+        {% include "partials/pipeline.html" %}
+      </div>
+    </div>
+  </section>
+  <div id="result">
+    {% include "partials/result.html" %}
+  </div>
+</div>
+{% endif %}

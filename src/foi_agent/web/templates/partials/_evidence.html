@@ -1,0 +1,32 @@
+{# Retrieved records, best match first. Records the assessment relied on are marked. ctx: case #}
+{% from "partials/_macros.html" import section %}
+{% set n = case.evidence|length %}
+{% set cited_count = case.evidence|selectattr('cited')|list|length %}
+{% set meta = n ~ ' record' ~ ('s' if n != 1 else '') ~ ((' · ' ~ cited_count ~ ' cited') if case.assessment else '') %}
+{% call section('Evidence', kind='retrieval', node='retrieve_evidence', meta=meta) %}
+  {% if case.evidence %}
+  <ul class="records">
+    {% for doc in case.evidence %}
+    <li>
+      <details class="record{% if doc.cited %} record--cited{% endif %}">
+        <summary>
+          <code class="record__id">{{ doc.id }}</code>
+          <span class="record__title">{{ doc.title }}{% if doc.cited %} <span class="record__cited">cited</span>{% endif %}</span>
+          <span class="record__source">{{ doc.source_label }}</span>
+          <span class="record__score" title="BM25 score">{{ '%.2f'|format(doc.score) }}</span>
+        </summary>
+        <dl class="record__fields">
+          {% for key, value in doc.fields %}
+          <dt>{{ key }}</dt>
+          <dd>{{ value }}</dd>
+          {% endfor %}
+        </dl>
+        {% if doc.url %}<p class="record__url"><a href="{{ doc.url }}" rel="noopener noreferrer">{{ doc.url }}</a></p>{% endif %}
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing was retrieved.</p>
+  {% endif %}
+{% endcall %}

@@ -1,0 +1,23 @@
+{% set kind_names = {'retrieval': 'retrieval', 'judgement': 'model', 'rule': 'rule', 'interrupt': 'human'} %}
+{% set status_names = {'pending': 'waiting', 'running': 'running', 'done': 'done', 'skipped': 'skipped', 'paused': 'paused'} %}
+<ol class="steps" aria-label="Graph nodes in order">
+  {% for step in pipeline %}
+  <li class="step step--{{ step.status }}"{% if step.status == 'running' %} aria-current="step"{% endif %}>
+    <span class="step__mark" aria-hidden="true"></span>
+    <span class="step__label" title="{{ step.node }}">{{ step.label }}</span>
+    <span class="step__summary">
+      <span class="visually-hidden">{{ status_names.get(step.status, step.status) }}: </span>
+      {%- if step.status == 'running' %}running…
+      {%- elif step.summary %}{{ step.summary }}
+      {%- elif step.status == 'skipped' %}skipped
+      {%- elif step.status == 'paused' %}paused
+      {%- else %}–{% endif -%}
+    </span>
+    <span class="step__kind">{{ kind_names.get(step.kind, step.kind) }}</span>
+  </li>
+  {% endfor %}
+</ol>
+<p class="note">
+  <span class="smallcaps">model</span> proposes, <span class="smallcaps">rule</span> decides in plain code;
+  <span class="smallcaps">retrieval</span> is BM25 search, <span class="smallcaps">human</span> the FOI officer.
+</p>

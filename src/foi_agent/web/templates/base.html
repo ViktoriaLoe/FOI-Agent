@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Northbrook FOI triage{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231b1b1a'/%3E%3Ctext x='8' y='12.5' font-family='Georgia,serif' font-size='12' text-anchor='middle' fill='%23fbfaf7'%3EN%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  {% set active = active|default('') %}
+  <header class="site-header wrap">
+    <a class="wordmark" href="/">Northbrook <span class="wordmark__sub">FOI triage</span></a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="/"{% if active == 'triage' %} aria-current="page"{% endif %}>Triage</a>
+      <a href="/review"{% if active == 'review' %} aria-current="page"{% endif %}>
+        Review
+        {%- if pending_count|default(0) %}
+        <span class="badge" title="{{ pending_count }} awaiting review">{{ pending_count }}<span class="visually-hidden"> awaiting review</span></span>
+        {%- endif %}
+      </a>
+    </nav>
+  </header>
+
+  <main id="main" class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer wrap">
+    <p>Northbrook Borough Council is fictional. Replies are written to <code>var/outbox/</code>; nothing is emailed.</p>
+  </footer>
+</body>
+</html>

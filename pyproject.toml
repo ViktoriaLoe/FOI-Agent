@@ -20,6 +20,13 @@ dev = [
     "pytest",
     "ruff",
 ]
+demo = [
+    "fastapi",
+    "jinja2",
+    "langgraph-checkpoint-sqlite",
+    "python-multipart",
+    "uvicorn",
+]
 
 [build-system]
 requires = ["setuptools>=61"]
@@ -29,7 +36,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-foi_agent = ["data/*.json"]
+foi_agent = ["data/*.json", "web/templates/*.html", "web/templates/partials/*.html", "web/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

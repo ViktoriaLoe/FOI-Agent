@@ -67,6 +67,46 @@ On Windows machines where the venv's `.exe` launchers are blocked, run `python -
 
 Replies are written to `var/outbox/` and each case is appended to `var/case_log.jsonl`. Nothing is emailed. Set `FOI_OUTPUT_DIR` to write somewhere else.
 
+### Demo UI
+
+A small web app over the same graph, built with FastAPI, Jinja2 and HTMX. It has two pages: **Triage**, to run a request and watch it go through the graph, and **Review**, the FOI officer's queue of escalated cases.
+
+1. Install the demo extra, in the same virtual environment as the Quickstart:
+
+   ```bash
+   pip install -e ".[demo]"
+   ```
+
+2. Check `.env` has `OPENAI_API_KEY` and `LANGSMITH_API_KEY`, as for the command line. The server reads `.env` when it starts.
+
+3. Start the server from the repo root:
+
+   ```bash
+   python -m uvicorn foi_agent.web.app:app --reload
+   ```
+
+   On Windows with the venv activated, the same command works in PowerShell. Where the venv's `.exe` launchers are blocked, call its Python directly: `.venv\Scripts\python -m uvicorn foi_agent.web.app:app --reload`.
+
+4. Open http://127.0.0.1:8000. Add `--port 8001` to the command if 8000 is taken.
+
+On **Triage**, type a request, or open **Sample requests** and pick one, then choose **Triage**. The path through the graph streams in node by node over server-sent events. The result shows:
+
+- the regime probabilities against the threshold, and the deadline;
+- why the case was sent, routed or escalated;
+- the assessment, the evidence and the draft reply;
+- the [checks](#checks);
+- for a request in the golden dataset, the run set against its label field by field;
+- with tracing on, a link to the run's LangSmith trace.
+
+On **Review**, the queue holds cases paused at `human_review`, soonest deadline first. The officer sends the reply, editing it first if it needs changing, or rejects it, and the graph resumes. A reply sent with changes is recorded as an edit. With tracing on, the decision is attached to the triage run in LangSmith as feedback: `officer_review`, plus `draft_edited` when the officer changed the reply.
+
+Things to know:
+
+- **Cost.** Each triage is a full run, with the same model calls as the command line. A run finishes even if you leave the page.
+- **Replays.** The last run of each sample request is saved to `var/demo_runs/`. **Show last run** replays it without calling a model, which is useful for a demo or recording.
+- **Storage.** Cases and checkpoints are kept in `var/web.sqlite`, so the review queue survives a restart. Stop the server and delete `var/web.sqlite` and `var/demo_runs/` to start afresh.
+- **Local only.** The app has no login, so keep it on 127.0.0.1.
+
 ## How it works
 
 ```mermaid

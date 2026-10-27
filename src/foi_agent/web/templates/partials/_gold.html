@@ -1,0 +1,25 @@
+{# This run set against its label in the golden dataset. ctx: case (case.gold is set) #}
+{% from "partials/_macros.html" import section %}
+{% set gold = case.gold %}
+{% set misses = gold.fields|rejectattr('match')|list|length %}
+{% call section('Against the gold label', meta=[gold.category, gold.slice]|select|join(' · '), class='gold' ~ ('' if gold.matched else ' gold--miss')) %}
+  <p class="gold__verdict">
+    {%- if gold.matched %}Matches the label on {{ {1: 'its one field', 2: 'both fields'}.get(gold.fields|length, 'all ' ~ gold.fields|length ~ ' fields') }}.
+    {%- else %}<span class="miss">Differs on {{ misses }} of {{ gold.fields|length }} field{{ 's' if gold.fields|length != 1 else '' }}.</span>
+    {%- endif %}
+  </p>
+  <table class="table gold__table">
+    <thead><tr><th scope="col"><span class="visually-hidden">Field</span></th><th scope="col">Expected</th><th scope="col">This run</th><th scope="col"><span class="visually-hidden">Match</span></th></tr></thead>
+    <tbody>
+      {% for field in gold.fields %}
+      <tr class="{{ 'gold__row--match' if field.match else 'gold__row--miss' }}">
+        <th scope="row">{{ field.label }}</th>
+        <td><code>{{ field.expected or '–' }}</code></td>
+        <td><code>{{ field.actual or '–' }}</code></td>
+        <td class="gold__mark">{{ '✓' if field.match else '✕' }}<span class="visually-hidden">{{ ' match' if field.match else ' differs' }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if gold.why %}<p class="note note--prose">{{ gold.why }}</p>{% endif %}
+{% endcall %}

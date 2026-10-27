@@ -1,0 +1,43 @@
+{# Small shared bits. Import with {% from "partials/_macros.html" import ... %}. #}
+
+{# One section of a case: a small-caps heading in the margin, the content beside it.
+   kind is model / rule / retrieval / human / template; node is the graph node it comes from. #}
+{% macro section(title, kind=None, node=None, meta=None, class='', id=None) -%}
+<section class="sect{% if class %} {{ class }}{% endif %}"{% if id %} aria-labelledby="{{ id }}"{% endif %}>
+  <header class="sect__head">
+    <h3 class="sect__title"{% if id %} id="{{ id }}"{% endif %}>{{ title }}</h3>
+    {%- if kind or node %}
+    <p class="sect__kind">{% if kind %}<span class="kind">{{ kind }}</span>{% endif %}{% if node %} <code>{{ node }}</code>{% endif %}</p>
+    {%- endif %}
+    {%- if meta %}
+    <p class="sect__meta">{{ meta }}</p>
+    {%- endif %}
+  </header>
+  <div class="sect__body">
+    {{ caller() }}
+  </div>
+</section>
+{%- endmacro %}
+
+{% macro status(value, label) -%}
+<span class="status status--{{ value }}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro days_left(n) -%}
+{%- if n is none -%}
+{%- elif n < 0 -%}
+<span class="due due--overdue">{{ -n }} working day{{ 's' if n != -1 else '' }} overdue</span>
+{%- elif n == 0 -%}
+<span class="due due--soon">due today</span>
+{%- elif n <= 5 -%}
+<span class="due due--soon">{{ n }} working day{{ 's' if n != 1 else '' }} left</span>
+{%- else -%}
+<span class="due">{{ n }} working days left</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro trace_link(case) -%}
+{%- if case.trace_url -%}
+<a class="link-quiet" href="{{ case.trace_url }}" target="_blank" rel="noopener">LangSmith trace <span aria-hidden="true">↗</span><span class="visually-hidden">(opens in a new tab)</span></a>
+{%- endif -%}
+{%- endmacro %}

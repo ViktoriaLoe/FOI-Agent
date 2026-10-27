@@ -1,0 +1,45 @@
+{% from "partials/_macros.html" import trace_link, status %}
+{% set outcomes = {
+  'sent': 'Sent without review: a low-risk signpost to information the council has already published.',
+  'routed': 'Routed before any FOI work, with an acknowledgement to the requester.',
+  'awaiting_review': 'Escalated. Paused for an FOI officer, with a suggested decision and a draft reply.',
+  'rejected': 'Rejected by an FOI officer. Nothing was sent.',
+} %}
+<article class="result result--{{ case.status }}" aria-labelledby="outcome-{{ case.id }}">
+  <header class="sect outcome">
+    <div class="sect__head">
+      <h3 class="sect__title" id="outcome-{{ case.id }}">Outcome</h3>
+      <p class="sect__meta">{{ status(case.status, case.status_label) }}</p>
+    </div>
+    <div class="sect__body">
+      {% if case.error %}
+      <p class="outcome__lede">The run stopped with an error. Nothing was sent.</p>
+      {% elif case.status == 'sent' and case.review %}
+      <p class="outcome__lede">Escalated, then {{ case.review.action_label|lower }} by an FOI officer and sent.</p>
+      {% elif outcomes.get(case.status) %}
+      <p class="outcome__lede">{{ outcomes[case.status] }}</p>
+      {% endif %}
+      <p class="outcome__meta">
+        <code>case {{ case.short_id }}</code>
+        {{ trace_link(case) }}
+        {% if case.review_url %}<a class="btn btn--small btn--primary" href="{{ case.review_url }}">Open in Review <span aria-hidden="true">→</span></a>{% endif %}
+      </p>
+    </div>
+  </header>
+
+  {% if case.error %}
+  <div class="callout callout--error" role="alert">
+    <pre class="callout__detail">{{ case.error }}</pre>
+    <p>The trace, if tracing is on, shows the node that failed.</p>
+  </div>
+  {% else %}
+  {% if case.gold %}{% include "partials/_gold.html" %}{% endif %}
+  {% if case.regime_scores or case.regime %}{% include "partials/_regime.html" %}{% endif %}
+  {% include "partials/_deadline.html" %}
+  {% include "partials/_decision.html" %}
+  {% if case.assessment %}{% include "partials/_assessment.html" %}{% endif %}
+  {% if case.evidence %}{% include "partials/_evidence.html" %}{% endif %}
+  {% if case.draft %}{% include "partials/_letter.html" %}{% endif %}
+  {% if case.checks %}{% include "partials/_checks.html" %}{% endif %}
+  {% endif %}
+</article>

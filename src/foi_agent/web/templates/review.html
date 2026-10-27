@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Review · Northbrook FOI triage{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Officer review</h1>
+  <p class="lede">
+    Escalated cases wait here, paused at the <code>human_review</code> interrupt. Send the draft as
+    it is or as you’ve edited it, or reject it, and the graph resumes from where it stopped.
+  </p>
+</header>
+
+<div class="layout layout--review">
+  {% set selected_id = selected.id if selected else None %}
+  {% include "partials/review_queue.html" %}
+
+  {% if selected %}
+  {% with case = selected %}{% include "partials/review_case.html" %}{% endwith %}
+  {% else %}
+  <section id="review-case" class="review-case review-case--empty" aria-label="Selected case">
+    <p class="empty__title">No case selected</p>
+    <p class="muted">Choose a case from the queue to see the agent’s suggested decision, the evidence
+      it relied on, why it escalated and the draft reply.</p>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

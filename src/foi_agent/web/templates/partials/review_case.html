@@ -1,0 +1,63 @@
+{% from "partials/_macros.html" import trace_link, status %}
+<section id="review-case" class="review-case result result--{{ case.status }}" aria-labelledby="case-title-{{ case.id }}">
+  <header class="case-head">
+    <h2 id="case-title-{{ case.id }}" class="case-head__title">Case <code>{{ case.short_id }}</code></h2>
+    {{ status(case.status, case.status_label) }}
+    <span class="case-head__links">{{ trace_link(case) }}</span>
+  </header>
+
+  <figure class="request-quote">
+    <blockquote><p>{{ case.request }}</p></blockquote>
+    <figcaption>Received {{ case.received_display }}</figcaption>
+  </figure>
+
+  {% if case.error %}
+  <div class="callout callout--error" role="alert">
+    <p class="callout__title">Something went wrong</p>
+    <pre class="callout__detail">{{ case.error }}</pre>
+  </div>
+  {% endif %}
+
+  {% if case.regime_scores or case.regime %}{% include "partials/_regime.html" %}{% endif %}
+  {% include "partials/_deadline.html" %}
+  {% include "partials/_decision.html" %}
+  {% if case.assessment %}{% include "partials/_assessment.html" %}{% endif %}
+  {% if case.evidence %}{% include "partials/_evidence.html" %}{% endif %}
+
+  {% if case.review %}
+  <div class="sect decided-note decided-note--{{ case.status }}" role="status">
+    <div class="sect__head">
+      <h3 class="sect__title">Officer decision</h3>
+      <p class="sect__meta">{{ status(case.status, case.review.action_label) }}</p>
+    </div>
+    <div class="sect__body">
+      <p class="outcome__lede">{% if case.status == 'sent' %}The reply was written to the outbox and the case logged.{% else %}Nothing was sent to the requester.{% endif %}</p>
+    </div>
+  </div>
+  {% if case.draft %}{% include "partials/_letter.html" %}{% endif %}
+  {% else %}
+  <form class="sect review-form"
+        hx-post="/review/{{ case.id }}" hx-target="#review-case" hx-swap="outerHTML"
+        hx-disabled-elt="#review-case button">
+    <div class="sect__head">
+      <h3 class="sect__title"><label for="draft-{{ case.id }}">Draft reply</label></h3>
+      <p class="sect__kind"><span class="kind">human</span> <code>human_review</code></p>
+    </div>
+    <div class="sect__body">
+      {% if case.draft %}
+      <p class="note note--lead">The agent’s draft. <em>Send reply</em> sends what is in the box; a changed reply is recorded as an edit.</p>
+      {% else %}
+      <p class="note note--lead">No draft. The agent only drafts replies for clear FOI requests, and this case was escalated before any FOI work. Write the reply here, or reject the case.</p>
+      {% endif %}
+      <textarea id="draft-{{ case.id }}" class="letter letter--input" name="draft" rows="16" required
+                {% if not case.draft %}placeholder="Dear requester,"{% endif %}>{{ case.draft or '' }}</textarea>
+      <div class="actions actions--review">
+        <button type="submit" name="action" value="approve" class="btn btn--primary">Send reply</button>
+        <button type="submit" name="action" value="reject" class="btn btn--danger" formnovalidate>Reject</button>
+      </div>
+    </div>
+  </form>
+  {% endif %}
+
+  {% if case.checks %}{% include "partials/_checks.html" %}{% endif %}
+</section>

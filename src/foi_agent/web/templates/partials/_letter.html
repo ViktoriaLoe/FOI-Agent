@@ -1,0 +1,17 @@
+{# The reply, set as a letter. ctx: case #}
+{% from "partials/_macros.html" import section %}
+{% set titles = {
+  'sent': 'Reply sent',
+  'routed': 'Acknowledgement sent',
+  'awaiting_review': 'Draft reply',
+  'rejected': 'Draft reply, not sent',
+} %}
+{% set edited = 'Edited by an officer' if case.review and case.review.action == 'edit' else None %}
+{% if case.action == 'route' %}
+{% set kind, node = 'template', 'route_non_foi' %}
+{% else %}
+{% set kind, node = 'model', 'draft_reply' %}
+{% endif %}
+{% call section(titles.get(case.status, 'Draft reply'), kind=kind, node=node, meta=edited) %}
+  <div class="letter">{{ case.draft }}</div>
+{% endcall %}

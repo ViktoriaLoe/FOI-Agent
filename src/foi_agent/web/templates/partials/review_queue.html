@@ -1,0 +1,50 @@
+{% from "partials/_macros.html" import days_left, status %}
+{# hx-swap-oob is inert on a full page load and swaps the queue when it rides along a review POST. #}
+<aside id="review-queue" class="queue" aria-labelledby="queue-title" hx-swap-oob="true">
+  <h2 class="queue__title" id="queue-title">Awaiting review <span class="queue__count">{{ pending|length }}</span></h2>
+  {% if pending %}
+  <ul class="queue__list"
+      hx-on::before-request="this.querySelector('[aria-current]')?.removeAttribute('aria-current'); event.target.closest('a').setAttribute('aria-current', 'true')">
+    {% for item in pending %}
+    <li>
+      <a class="queue-item" href="/review?case={{ item.id }}"
+         hx-get="/review/{{ item.id }}" hx-target="#review-case" hx-swap="outerHTML"
+         hx-push-url="/review?case={{ item.id }}"
+         {% if item.id == selected_id %}aria-current="true"{% endif %}>
+        <span class="queue-item__top">
+          <code>{{ item.short_id }}</code>
+          {% if item.regime %}<span class="smallcaps">{{ item.regime }}</span>{% endif %}
+          <span class="queue-item__due">
+            {%- if item.deadline_display %}{{ item.deadline_display }} · {{ days_left(item.working_days_left) }}{% else %}no deadline{% endif -%}
+          </span>
+        </span>
+        <span class="queue-item__excerpt">{{ item.request_excerpt }}</span>
+        {% if item.first_reason %}
+        <span class="queue-item__reason">{{ item.first_reason }}{% if item.reasons_count > 1 %} <span class="muted">+{{ item.reasons_count - 1 }} more</span>{% endif %}</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="queue__empty">
+    <p class="empty__title">Nothing waiting</p>
+    <p class="muted">Escalated cases appear here until an officer decides them. Triage a request that
+      needs judgement, such as one with a likely exemption, to add one.</p>
+  </div>
+  {% endif %}
+
+  {% if decided %}
+  <h2 class="queue__title queue__title--spaced">Recently decided</h2>
+  <ul class="decided">
+    {% for item in decided %}
+    <li>
+      <code>{{ item.short_id }}</code>
+      {{ status(item.outcome, item.outcome) }}
+      <span class="decided__detail">{{ item.regime or '' }}{% if item.review_action %} · {{ item.review_action }}{% endif %}</span>
+      <span class="decided__time">{{ item.timestamp_display }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</aside>

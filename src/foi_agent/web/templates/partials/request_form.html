@@ -1,0 +1,36 @@
+{% set example = form.example %}
+<form id="request-form" class="request-form"
+      hx-post="/triage" hx-target="#run" hx-swap="innerHTML"
+      hx-disabled-elt="#request-form button">
+  <label class="visually-hidden" for="request-text">Request text</label>
+  <textarea id="request-text" class="request-form__text" name="request" rows="7" required
+            placeholder="Type or paste a request, as the council would receive it">{{ form.request }}</textarea>
+
+  {% if example %}
+  <p class="hint"><span class="eyebrow">What it tests</span> {{ example.note }}</p>
+  <p class="hint__meta">
+    <code>requests.jsonl:{{ example.line }}</code>
+    {%- if example.expected_path %} · expected path <span class="smallcaps">{{ example.expected_path }}</span>{% endif %}
+  </p>
+  {% endif %}
+
+  <div class="request-form__foot">
+    <div class="field">
+      <label class="label" for="request-received">Received</label>
+      <input id="request-received" type="date" name="received" value="{{ form.received }}" required>
+    </div>
+    <div class="actions">
+      {% if example and example.has_replay %}
+      <button type="button" class="btn btn--secondary"
+              hx-get="/examples/{{ example.line }}/replay" hx-target="#run" hx-swap="innerHTML"
+              title="Ran {{ example.replay_at_display }}. Replays the saved state; no model calls">
+        Show last run
+      </button>
+      {% endif %}
+      <button type="submit" class="btn btn--primary">
+        <span class="spinner" aria-hidden="true"></span>
+        Triage
+      </button>
+    </div>
+  </div>
+</form>

@@ -1,0 +1,30 @@
+{# The decision model's probabilities against the code's threshold. ctx: case #}
+{% from "partials/_macros.html" import section %}
+{% set threshold = '%.2f'|format(case.threshold_pct / 100) %}
+{% call section('Regime', kind='model', node='classify_regime') %}
+  {% if case.regime_unclear %}
+  <p class="lead lead--warn">Unclear</p>
+  <p class="note">No regime reached the {{ threshold }} threshold, so the case leaves FOI work and goes to an officer.</p>
+  {% else %}
+  <p class="lead">{{ case.regime_label }}</p>
+  {% endif %}
+
+  {% if case.regime_scores %}
+  <div class="bars{% if case.regime_unclear %} bars--unclear{% endif %}" style="--threshold: {{ case.threshold_pct }}%">
+    <div class="bar bar--axis" aria-hidden="true">
+      <span></span>
+      <span class="bar__axis"><span class="bar__marker-label">threshold {{ threshold }}</span></span>
+      <span></span>
+    </div>
+    <ul class="bars__list" aria-label="Probability for each regime; the threshold is {{ threshold }}">
+      {% for score in case.regime_scores %}
+      <li class="bar{% if score.is_top %} bar--top{% endif %}">
+        <span class="bar__label">{{ score.label }}</span>
+        <span class="bar__track" aria-hidden="true"><span class="bar__fill" style="width: {{ score.pct }}%"></span></span>
+        <span class="bar__value">{{ '%.2f'|format(score.prob) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+{% endcall %}

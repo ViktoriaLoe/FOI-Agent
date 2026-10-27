@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Triage · Northbrook FOI triage{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>Triage a request</h1>
+  <p class="lede">
+    The agent settles the regime first, routes anything that isn’t FOI, and only sends on its own
+    when the reply is a low-risk signpost to published information. Everything else goes to an
+    FOI officer.
+  </p>
+</header>
+
+<div class="doc">
+  <section class="sect sect--form" aria-labelledby="request-title">
+    <header class="sect__head">
+      <h2 class="sect__title" id="request-title">Request</h2>
+    </header>
+    <div class="sect__body">
+      {# Closes itself once a sample has loaded into the form. #}
+      <details class="samples" hx-on::after-request="this.open = false">
+        <summary>Sample requests <span class="samples__count">{{ examples|length }}</span></summary>
+        <ol class="sample-list"
+            hx-on::before-request="this.querySelector('[aria-current]')?.removeAttribute('aria-current'); event.target.setAttribute('aria-current', 'true')">
+          {% for example in examples %}
+          <li>
+            <button type="button" class="sample"
+                    hx-get="/examples/{{ example.line }}" hx-target="#request-form" hx-swap="outerHTML"
+                    {% if form.example and form.example.line == example.line %}aria-current="true"{% endif %}>
+              <span class="sample__num">{{ '%02d'|format(example.line) }}</span>
+              <span class="sample__title">{{ example.title }}</span>
+              {% if example.expected_path %}
+              <span class="sample__path" title="Expected path, from the golden dataset">{{ example.expected_path }}</span>
+              {% endif %}
+              <span class="sample__meta">{{ example.received_display }}{% if example.has_replay %} · last run saved{% endif %}</span>
+            </button>
+          </li>
+          {% endfor %}
+        </ol>
+        <p class="samples__source">From <code>examples/requests.jsonl</code>. The tag is the path the golden dataset expects.</p>
+      </details>
+
+      {% include "partials/request_form.html" %}
+    </div>
+  </section>
+
+  <section id="run" class="run-slot" aria-label="Run">
+    <div class="sect sect--empty">
+      <header class="sect__head">
+        <h2 class="sect__title">Run</h2>
+      </header>
+      <div class="sect__body">
+        <p class="muted">No run yet. Triage a request to watch it move through the graph, node by node.
+          A case ends one of three ways:</p>
+        <dl class="endings">
+          <div><dt class="status status--routed">route</dt><dd>Not FOI: acknowledged and passed to the right team.</dd></div>
+          <div><dt class="status status--sent">send</dt><dd>A clean signpost to published information.</dd></div>
+          <div><dt class="status status--awaiting_review">escalate</dt><dd>Anything else, to an FOI officer.</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

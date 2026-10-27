@@ -1,0 +1,34 @@
+{# Why the case went the way it did. The reasons come from code, never from a model. ctx: case #}
+{% from "partials/_macros.html" import section %}
+{% set rule_node = 'decide_action' if case.assessment else 'route_non_foi' %}
+{% if case.action == 'escalate' %}
+{% call section('Why it escalated', kind='rule', node=rule_node, class='decision') %}
+  {% if case.escalation_reasons %}
+  <ol class="reasons">
+    {% for reason in case.escalation_reasons %}<li>{{ reason }}</li>{% endfor %}
+  </ol>
+  {% else %}
+  <p>No reason was recorded.</p>
+  {% endif %}
+{% endcall %}
+{% elif case.action == 'send' %}
+{% set published_id = case.assessment.published_id if case.assessment else None %}
+{% set published = case.evidence|selectattr('id', 'equalto', published_id)|list %}
+{% call section('Why it was safe to send', kind='rule', node='decide_action', class='decision') %}
+  <p class="note note--lead">Sent only because every condition holds:</p>
+  <ul class="conditions">
+    <li>The recommended decision is a signpost to information already published.</li>
+    <li>
+      It points to <code>{{ published_id }}</code>{% if published %}, a {{ published[0].source_label|lower }} record that was retrieved{% endif %}{% if published and published[0].source == 'disclosure_log' %} and released in full{% endif %}.
+    </li>
+    <li>No exemption applies other than s21, which is how a signpost is given.</li>
+  </ul>
+{% endcall %}
+{% elif case.action == 'route' %}
+{% set top = case.regime_scores|selectattr('is_top')|list %}
+{% call section('Why it was routed', kind='rule', node='route_non_foi', class='decision') %}
+  <p class="prose">The classifier was clear that this is not an FOI request: {{ case.regime_label }}{% if top %}, {{ '%.2f'|format(top[0].prob) }}{% endif %}.
+    A template acknowledgement named the team it has gone to. No FOI work ran: no deadline,
+    retrieval or assessment.</p>
+{% endcall %}
+{% endif %}
