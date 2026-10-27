@@ -8,10 +8,10 @@ It works out what kind of request has come in, routes anything that isn't FOI to
 
 - Python
 - LangGraph (LangGraph Studio for development)
-- OpenAI `gpt-6-luna` for assessment and drafting (set `FOI_MODEL` to use another model)
+- OpenAI `gpt-6-luna` for the independent regime check, the search tool, assessment and drafting (set `FOI_MODEL` to use another model)
 - A decision model for regime classification, `semif-qwen3.5-4b` through `langchain-typesafe` and the LangSmith Gateway (set `FOI_CLASSIFIER_MODEL` to use another model)
 - BM25 retrieval (`rank-bm25`) over a small knowledge base
-- LangSmith for tracing and evaluation
+- LangSmith for tracing and evaluation, with an LLM judge on a different, pinned OpenAI model (`gpt-5.5-2026-04-23`)
 
 ## Quickstart
 
@@ -112,12 +112,16 @@ Things to know:
 ```mermaid
 flowchart TD
     A[Request received] --> C[classify_regime]
-    C -->|SAR / business as usual / EIR / unclear| D[route_non_foi]
-    D -->|SAR / business as usual| K
-    D -->|EIR / unclear| J
-    C -->|clear FOI| E[compute_deadline]
-    E --> F[retrieve_evidence]
-    F --> G[assess]
+    C --> R[check_regime]
+    R --> E[compute_deadline]
+    E -->|FOI, nothing blocking| F[retrieve_evidence]
+    E -->|anything else| D[route_non_foi]
+    D -->|SAR / business as usual, nothing blocking| K
+    D -->|EIR, or anything blocking| J
+    F --> V[investigate]
+    V -->|search| S[run_searches]
+    S --> V
+    V -->|enough evidence, or 3 searches made| G[assess]
     G --> H[decide_action]
     H --> I[draft_reply]
     I -->|low risk| K[log_and_send]
@@ -130,14 +134,22 @@ flowchart TD
 | Node | Type | What it does |
 | --- | --- | --- |
 | `classify_regime` | Judgement (decision model) | FOI, EIR, SAR or business as usual, with a probability for each. It is given the ICO guidance summary for every regime, every time |
-| `route_non_foi` | Deterministic | SAR and business as usual get a template acknowledgement naming the team it has gone to; EIR escalates. If the top regime's probability is below `REGIME_MIN_PROB` (0.6, uncalibrated), the regime is unclear and the case escalates, FOI included |
-| `compute_deadline` | Deterministic | 20 working days, with day one the first working day after receipt. Skips weekends and bank holidays in any part of the UK (FOIA s10(6)) |
+| `check_regime` | Judgement (LLM) | An independent second opinion on the regime from a different model, which isn't shown the classifier's answer |
+| `compute_deadline` | Deterministic | By the classifier's regime: 20 working days for FOI and EIR, skipping weekends and bank holidays in any part of the UK (FOIA s10(6)); one calendar month for a SAR; none for business as usual |
+| `route_non_foi` | Deterministic | SAR and business as usual get a template acknowledgement naming the team it has gone to, but only if nothing blocks an automatic action. EIR, and any case with a blocker, escalates |
 | `retrieve_evidence` | Retrieval | Searches the disclosure log, publication scheme and exemption guidance using the request text |
+| `investigate`, `run_searches` | Tool use (LLM) | The model may search the same three sources again, in its own words, at most 3 times, before assessment. Read-only. Turn it off with `FOI_SEARCH_TOOL=0` |
 | `assess` | Judgement (LLM) | Already published (and where), possible exemptions, recommended decision, evidence relied on |
-| `decide_action` | Deterministic | Sends only a signpost to a retrieved publication scheme record or fully released disclosure log entry, with no exemption other than s21. Everything else escalates, with the reasons |
-| `draft_reply` | Judgement (LLM) | Plain-English reply grounded in the assessment and evidence |
+| `decide_action` | Deterministic | Sends only a signpost to a retrieved publication scheme record or fully released disclosure log entry, with no exemption other than s21 and nothing blocking an automatic action. Everything else escalates, with the reasons |
+| `draft_reply` | Judgement (LLM) | Plain-English reply grounded in the assessment and evidence. Information an officer must supply is left as `[OFFICER: …]` |
 | `human_review` | Interrupt | Officer approves, edits or rejects escalated cases |
 | `log_and_send` | Deterministic | Writes the reply to the outbox and appends to the case log |
+
+The agent acts on its own in two ways: sending a signpost and routing a SAR or business-as-usual case. Both are blocked, and the case escalates, if any of these holds:
+
+- the classifier's top regime is below `REGIME_MIN_PROB` (0.6);
+- the independent regime check disagrees with the classifier;
+- the request may not be in English.
 
 ## Observability
 
@@ -151,10 +163,11 @@ Every run carries metadata, so traces and experiments can be filtered and compar
 | `classifier_model` | The regime classifier's decision model (`FOI_CLASSIFIER_MODEL`) |
 | `prompt_version` | `PROMPT_VERSION` in [prompts.py](src/foi_agent/prompts.py), bumped whenever a prompt or the classifier's question changes |
 | `retriever`, `retrieval_k` | The retrieval method and the number of records taken from each source |
+| `search_tool`, `max_searches` | Whether the search tool is on, and its limit |
 | `corpus_version` | A hash of the knowledge base files, which changes whenever the data does |
 | `thread_id` | The case id, added by LangGraph |
 
-Runs from the command line are also tagged `cli`. Runs from the sample file record the line they came from as `example`.
+Experiments also record `judge_model`, `judge_version` and `checks_version`, and LangSmith adds the git commit. Runs from the command line are also tagged `cli`. Runs from the sample file record the line they came from as `example`.
 
 Traces store the request text in full, and real requests can contain personal data. That's acceptable for a prototype with invented requests, but a live deployment would need to mask inputs before they leave the council.
 
@@ -171,6 +184,7 @@ Traces store the request text in full, and real requests can contain personal da
 | `draft_links_grounded` | Draft reply | The reply links to a URL that isn't in the evidence and isn't the council's or the ICO's |
 | `draft_states_rights` | Draft reply | The reply doesn't mention internal review and the ICO |
 | `draft_no_new_personal_data` | Draft reply | The reply contains an email address, phone number, National Insurance number or postcode that wasn't in the request, other than the council's or the ICO's |
+| `sent_draft_complete` | Draft reply | A reply that was sent contains a placeholder, such as `[OFFICER: …]` |
 
 To score traced runs and attach the results to them in LangSmith as feedback:
 
@@ -197,19 +211,27 @@ Run an experiment:
 python -m evals.run_experiment --split dev --limit 5      # a cheap first run
 python -m evals.run_experiment --split dev --classify-only # regime classification only, no OpenAI calls
 python -m evals.run_experiment --split dev --repetitions 2 # the full dev split, each example twice
+python -m evals.run_experiment --split dev --no-search-tool # the same without the search tool, for comparison
 ```
 
-Each FOI case makes two OpenAI calls, plus one for the judge (skip it with `--no-judge`). Use `--slice` to run one slice and `--pause` to space out requests. Every experiment records the git commit and the agent's run metadata, and its summary by category and slice is saved to `evals/results/`.
+Every case makes one OpenAI call for the regime check. An FOI case that reaches assessment makes 3 to 5 more: 1 to 3 for the search tool, then assess and draft. The judge adds one per draft (skip it with `--no-judge`). Use `--slice` to run one slice and `--pause` to space out requests. Every experiment records its run metadata, and its summary by category and slice is saved to `evals/results/`.
+
+To apply new or changed evaluators to an existing experiment without rerunning the agent, which makes no OpenAI calls unless the judge is included:
+
+```bash
+python -m evals.run_experiment --rescore v2-full-dev-09001cf0 --only no_wrong_auto_action sent_draft_complete
+```
 
 Each run is scored by three kinds of evaluator:
 
 | Kind | Where | What it scores |
 | --- | --- | --- |
 | Code checks, no labels needed | [checks.py](src/foi_agent/checks.py) | Grounded citations, consistent assessments, links, personal data, the requester's rights (see [Checks](#checks)) |
-| Code compared with the labels | [evaluators.py](evals/evaluators.py) | `regime_correct`, `action_correct`, `no_unsafe_send`, `sends_when_expected`, `decision_correct`, `published_match`, `exemption_recall` and `exemption_precision`, `deadline_correct`, `retrieval_recall` |
-| LLM judge | [judge.py](evals/judge.py) | Whether the draft is right for the case, grounded in the evidence and clear. The model is set by `FOI_JUDGE_MODEL`, and defaults to the agent's model |
+| Code compared with the labels | [evaluators.py](evals/evaluators.py) | `regime_correct`, `regime_check_correct`, `action_correct`, `no_wrong_auto_action`, `no_unsafe_send`, `sends_when_expected`, `decision_correct`, `published_match`, `exemption_recall` and `exemption_precision`, `deadline_correct`, `retrieval_recall` |
+| Trajectory | [evaluators.py](evals/evaluators.py) | `searches_made` (how often the search tool was used) and `tool_found_relevant` (relevant records only the tool found) |
+| LLM judge | [judge.py](evals/judge.py) | Whether the draft is right for the case, grounded in the evidence and clear. It judges a sent reply as finished, and an escalated draft as a starting point for an officer, where marked placeholders are fine but invented facts are not. It runs on `gpt-5.5-2026-04-23` by default (`FOI_JUDGE_MODEL`), so it isn't judging its own model's drafts |
 
-`no_unsafe_send` is the headline: the agent must never send a reply an officer should have seen. `sends_when_expected` measures the cost of caution, because escalating a safe signpost wastes an officer's time.
+`no_wrong_auto_action` is the headline: the agent must never send or route a case an officer should have seen. `no_unsafe_send` counts sends only. `sends_when_expected` measures the cost of caution, because escalating a safe signpost wastes an officer's time.
 
 ## Knowledge base
 
@@ -227,4 +249,4 @@ The ICO summaries contain public sector information licensed under the Open Gove
 
 ## Why the agent is cautious
 
-The costly mistakes are the ones that can't be undone once a reply is sent. A Subject Access Request answered as FOI effectively publishes someone's personal data, and a wrong refusal or disclosure can lead to an ICO complaint. So the agent classifies the regime first, escalates when no regime is clearly ahead, keeps the send/escalate decision as a plain rule rather than an LLM call, and defaults to escalating.
+The costly mistakes are the ones that can't be undone once a reply is sent. A Subject Access Request answered as FOI effectively publishes someone's personal data, and a wrong refusal or disclosure can lead to an ICO complaint. So the agent classifies the regime first, has a second model check it independently, escalates when the two disagree or no regime is clearly ahead, keeps the send/escalate decision as a plain rule rather than an LLM call, and defaults to escalating.
