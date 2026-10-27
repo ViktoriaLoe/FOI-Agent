@@ -59,3 +59,11 @@ def test_the_judge_defaults_to_a_different_model_from_the_agent(monkeypatch):
     from foi_agent import nodes
 
     assert judge_model_name() != nodes.model_name()
+
+
+def test_the_judge_version_is_part_of_the_score_key(monkeypatch):
+    # Rescoring an old experiment must not mix a new judge's scores with the old judge's.
+    from evals.judge import JUDGE_KEY
+
+    monkeypatch.setattr(judge, "_judge", FakeJudge)
+    assert draft_judge(ESCALATED, EXAMPLE)["key"] == JUDGE_KEY == f"draft_judge_{JUDGE_VERSION}"

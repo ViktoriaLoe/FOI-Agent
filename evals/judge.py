@@ -18,6 +18,9 @@ from foi_agent import nodes
 
 # j1 judged every draft as a finished letter. j2 judges each draft by its purpose.
 JUDGE_VERSION = "j2"
+# The version is part of the score's key, so rescoring an old experiment with a new judge adds
+# draft_judge_j2 beside its old draft_judge scores instead of mixing the two.
+JUDGE_KEY = f"draft_judge_{JUDGE_VERSION}"
 
 JUDGE_SYSTEM = """\
 You review draft replies to Freedom of Information requests written for Northbrook Borough \
@@ -98,10 +101,10 @@ def _case(outputs: dict, example) -> str:
 def draft_judge(outputs: dict, example) -> dict:
     """Pass or fail for an FOI draft. Routed acknowledgements and empty drafts aren't judged."""
     if outputs.get("action") == "route" or not outputs.get("draft"):
-        return {"key": "draft_judge", "score": None, "comment": "No FOI draft."}
+        return {"key": JUDGE_KEY, "score": None, "comment": "No FOI draft."}
     verdict = _judge().invoke([SystemMessage(JUDGE_SYSTEM), HumanMessage(_case(outputs, example))])
     return {
-        "key": "draft_judge",
+        "key": JUDGE_KEY,
         "score": int(verdict.passes),
         "comment": f"[{JUDGE_VERSION}] {verdict.reasoning}",
     }
