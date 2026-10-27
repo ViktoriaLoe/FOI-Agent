@@ -36,8 +36,7 @@ from langsmith import Client, evaluate, evaluate_existing
 
 from foi_agent import nodes
 from foi_agent.checks import ALL_CHECKS, checks_version
-from foi_agent.graph import build_graph, run_metadata, search_tool_enabled
-from foi_agent.prompts import PROMPT_VERSION
+from foi_agent.graph import AGENT_VERSION, build_graph, run_metadata, search_tool_enabled
 
 RESULTS = Path(__file__).parent / "results"
 HEADLINE = ("no_wrong_auto_action", "action_correct", "regime_correct", "decision_correct")
@@ -190,7 +189,7 @@ def main() -> None:
         }
         | evaluator_versions(evaluators)
     )
-    prefix = f"{PROMPT_VERSION}-{mode}-{args.split}" + ("" if search_tool else "-notool")
+    prefix = f"{AGENT_VERSION}-{mode}-{args.split}" + ("" if search_tool else "-notool")
     print(f"Running {len(examples)} {args.split} examples ({mode}) x {args.repetitions}")
     results = evaluate(
         target,

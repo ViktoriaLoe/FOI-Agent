@@ -17,6 +17,11 @@ def search_tool_enabled() -> bool:
     return os.environ.get("FOI_SEARCH_TOOL", "").strip().lower() not in {"0", "false", "off"}
 
 
+# The agent's release, which names experiments. v1 is the first build and its fixes; v2 adds the
+# independent regime check, blockers on automatic actions and the search tool.
+AGENT_VERSION = "v2"
+
+
 def run_metadata(search_tool: bool | None = None) -> dict:
     """What produced a run. Attached to every trace, so runs and experiments can be filtered
     and compared by model, prompt version, retriever, search tool and knowledge base.
@@ -26,6 +31,7 @@ def run_metadata(search_tool: bool | None = None) -> dict:
     if search_tool is None:
         search_tool = search_tool_enabled()
     return {
+        "agent_version": AGENT_VERSION,
         "model": nodes.model_name(),
         "classifier_model": nodes.classifier_model_name(),
         "prompt_version": PROMPT_VERSION,

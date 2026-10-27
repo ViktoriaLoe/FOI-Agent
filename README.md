@@ -159,6 +159,7 @@ Every run carries metadata, so traces and experiments can be filtered and compar
 
 | Key | Value |
 | --- | --- |
+| `agent_version` | `AGENT_VERSION` in [graph.py](src/foi_agent/graph.py), the agent's release, which also names experiments (`v2-full-dev-…`) |
 | `model` | The LLM in use for assessment and drafting (`FOI_MODEL`) |
 | `classifier_model` | The regime classifier's decision model (`FOI_CLASSIFIER_MODEL`) |
 | `prompt_version` | `PROMPT_VERSION` in [prompts.py](src/foi_agent/prompts.py), bumped whenever a prompt or the classifier's question changes |
@@ -219,7 +220,7 @@ Every case makes one OpenAI call for the regime check. An FOI case that reaches 
 To apply new or changed evaluators to an existing experiment without rerunning the agent, which makes no OpenAI calls unless the judge is included:
 
 ```bash
-python -m evals.run_experiment --rescore v2-full-dev-09001cf0 --only no_wrong_auto_action sent_draft_complete
+python -m evals.run_experiment --rescore EXPERIMENT_NAME --only no_wrong_auto_action sent_draft_complete
 ```
 
 Each run is scored by three kinds of evaluator:
