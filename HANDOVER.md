@@ -92,7 +92,7 @@ Dev split, the same 42 examples in both runs. Better and worse count examples th
 
 ## Traces and experiments
 
-In LangSmith, on the `foi-golden` dataset's Experiments tab:
+**[Open the dataset and experiments in LangSmith](https://smith.langchain.com/public/804b9bd4-47cf-413d-b42a-32f0f1798ba4/d)** (public link). Each experiment row opens its traces, and the Compare view puts runs side by side.
 
 | Experiment | What it is |
 | --- | --- |
