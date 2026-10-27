@@ -8,12 +8,15 @@ from evals.evaluators import (
     exemption_precision,
     exemption_recall,
     no_unsafe_send,
+    no_wrong_auto_action,
     published_match,
+    regime_check_correct,
     regime_correct,
     retrieval_recall,
     sends_when_expected,
 )
-from evals.run_experiment import summarise
+from evals.judge import JUDGE_VERSION, draft_judge
+from evals.run_experiment import evaluator_versions, full_evaluators, summarise
 from evals.upload_dataset import load_examples
 
 
@@ -50,6 +53,30 @@ def test_sending_is_only_safe_when_the_label_says_send(got, expected, safe):
 
 def test_escalating_is_never_unsafe():
     assert score(no_unsafe_send, {"action": "escalate"}, {"action": "send"}) == 1
+
+
+@pytest.mark.parametrize(
+    ("got", "expected", "comment"),
+    [
+        ("route", "escalate", "Routed, but should escalate."),
+        ("send", "escalate", "Sent, but should escalate."),
+        ("route", "send", "Routed, but should send."),
+    ],
+)
+def test_any_wrong_automatic_action_fails(got, expected, comment):
+    result = no_wrong_auto_action({"action": got}, {"action": expected})
+    assert result["score"] == 0
+    assert result["comment"] == comment
+
+
+@pytest.mark.parametrize("label", ["route", "send"])
+def test_a_correct_automatic_action_passes(label):
+    assert score(no_wrong_auto_action, {"action": label}, {"action": label}) == 1
+
+
+@pytest.mark.parametrize("label", ["send", "route", "clarify"])
+def test_escalating_is_never_a_wrong_automatic_action(label):
+    assert score(no_wrong_auto_action, {"action": "escalate"}, {"action": label}) == 1
 
 
 def test_escalating_a_safe_signpost_counts_as_a_missed_send():
@@ -122,3 +149,25 @@ def test_summary_averages_only_scores_that_apply():
     summary = summarise(rows, "test")
     assert "| `no_unsafe_send` | 50% (n=2) |" in summary
     assert "| `action_correct` | 0% (n=1) |" in summary
+
+
+def test_rescoring_can_be_limited_to_named_evaluators_and_leaves_out_the_judge():
+    assert draft_judge not in full_evaluators(judge=False)
+    chosen = full_evaluators(judge=False, only=["no_wrong_auto_action", "sent_draft_complete"])
+    assert [e.__name__ for e in chosen] == ["sent_draft_complete", "no_wrong_auto_action"]
+    with pytest.raises(SystemExit):
+        full_evaluators(judge=False, only=["no_such_check"])
+
+
+def test_versions_are_recorded_only_for_evaluators_in_use():
+    assert evaluator_versions(full_evaluators(judge=True))["judge_version"] == JUDGE_VERSION
+    versions = evaluator_versions([regime_correct])
+    assert versions == {"checks_version": None, "judge_version": None}
+
+
+def test_regime_check_is_scored_against_the_label_and_skipped_without_one():
+    reference = {"regime": "FOI"}
+    assert score(regime_check_correct, {"regime": "SAR", "regime_check": "FOI"}, reference) == 1
+    assert score(regime_check_correct, {"regime": "FOI", "regime_check": "SAR"}, reference) == 0
+    assert score(regime_check_correct, {"regime": "FOI"}, reference) is None
+    assert score(regime_check_correct, {"regime_check": "FOI"}, {"action": "escalate"}) is None

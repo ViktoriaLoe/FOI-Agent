@@ -32,6 +32,12 @@ _PERSONAL_DATA = {
     "National Insurance number": re.compile(r"\b[A-CEGHJ-PR-TW-Z]{2}\s?(?:\d{2}\s?){3}[A-D]\b"),
     "postcode": re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b"),
 }
+# Gaps left for an officer to fill, such as [OFFICER: total cost], [insert date] or [TBC]. A
+# bracket followed by "(" is a markdown link, not a gap.
+_PLACEHOLDER = re.compile(
+    r"\[\s*(?:officer\s*:|(?:insert|tbc|tbd|number|amount|date|figure)\b)[^\]]*\](?!\()",
+    re.IGNORECASE,
+)
 
 
 def _result(key: str, passed: bool | None, comment: str = "") -> dict:
@@ -154,6 +160,14 @@ def draft_no_new_personal_data(outputs: dict) -> dict:
     return _result("draft_no_new_personal_data", not found, "; ".join(found))
 
 
+def sent_draft_complete(outputs: dict) -> dict:
+    """Draft: a reply sent without an officer has no gaps left for one to fill."""
+    if outputs.get("action") != "send" or not outputs.get("draft"):
+        return _result("sent_draft_complete", None, "No sent draft.")
+    gaps = _PLACEHOLDER.findall(outputs["draft"])
+    return _result("sent_draft_complete", not gaps, f"Placeholders: {', '.join(gaps)}")
+
+
 ALL_CHECKS = (
     evidence_found,
     citations_grounded,
@@ -162,6 +176,7 @@ ALL_CHECKS = (
     draft_links_grounded,
     draft_states_rights,
     draft_no_new_personal_data,
+    sent_draft_complete,
 )
 
 

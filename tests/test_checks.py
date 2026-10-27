@@ -9,6 +9,7 @@ from foi_agent.checks import (
     evidence_found,
     exemption_sections_known,
     run_checks,
+    sent_draft_complete,
 )
 
 PS_URL = "https://www.northbrook.example/transparency/senior-salaries"
@@ -51,7 +52,7 @@ ROUTED_SAR = {
 
 
 def test_a_clean_run_passes_every_check():
-    assert [r["score"] for r in run_checks(foi_run())] == [1] * 7
+    assert [r["score"] for r in run_checks(foi_run())] == [1] * 8
 
 
 def test_checks_that_need_an_foi_draft_or_assessment_do_not_apply_to_a_routed_sar():
@@ -150,3 +151,24 @@ def test_personal_data_the_requester_gave_is_allowed():
         draft=f"{GOOD_DRAFT} We have sent this to j.smith@gmail.com.",
     )
     assert draft_no_new_personal_data(run)["score"] == 1
+
+
+def test_a_sent_draft_with_ordinary_brackets_and_links_is_complete():
+    draft = f"{GOOD_DRAFT} Names are withheld (s40). See [the salaries page]({PS_URL})."
+    assert sent_draft_complete(foi_run(draft=draft))["score"] == 1
+
+
+@pytest.mark.parametrize(
+    "gap",
+    ["[OFFICER: total cost in 2025/26]", "[officer:number]", "[Insert date of decision]"]
+    + ["[number]", "[Amount]", "[DATE]", "[TBC]", "[ number of complaints ]"],
+)
+def test_a_sent_draft_with_a_placeholder_fails(gap):
+    result = sent_draft_complete(foi_run(draft=f"The figure is {gap}. {GOOD_DRAFT}"))
+    assert result["score"] == 0
+    assert gap in result["comment"]
+
+
+def test_placeholders_are_expected_in_an_escalated_draft():
+    run = foi_run(action="escalate", draft="We spent [OFFICER: total cost] on agency staff.")
+    assert sent_draft_complete(run)["score"] is None
