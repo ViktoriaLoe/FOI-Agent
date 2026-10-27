@@ -52,8 +52,13 @@ class Verdict(BaseModel):
     passes: bool = Field(description="True only if the draft meets all three.")
 
 
+# A different model generation from the agent's, so the judge doesn't favour drafts written in
+# its own style, and a dated snapshot, so its scores don't drift between experiments.
+DEFAULT_JUDGE_MODEL = "openai:gpt-5.5-2026-04-23"
+
+
 def judge_model_name() -> str:
-    return os.environ.get("FOI_JUDGE_MODEL", nodes.model_name())
+    return os.environ.get("FOI_JUDGE_MODEL", DEFAULT_JUDGE_MODEL)
 
 
 @cache

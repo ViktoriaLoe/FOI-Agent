@@ -48,3 +48,14 @@ def test_a_sent_draft_is_described_as_sent(monkeypatch):
 def test_routed_acknowledgements_are_not_judged(monkeypatch):
     monkeypatch.setattr(judge, "_judge", lambda: None)  # would fail if called
     assert draft_judge(ESCALATED | {"action": "route"}, EXAMPLE)["score"] is None
+
+
+def test_the_judge_defaults_to_a_different_model_from_the_agent(monkeypatch):
+    # A model judging its own drafts tends to favour them.
+    monkeypatch.delenv("FOI_JUDGE_MODEL", raising=False)
+    monkeypatch.delenv("FOI_MODEL", raising=False)
+    from evals.judge import judge_model_name
+
+    from foi_agent import nodes
+
+    assert judge_model_name() != nodes.model_name()
