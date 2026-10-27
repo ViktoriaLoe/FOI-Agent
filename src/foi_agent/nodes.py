@@ -1,4 +1,4 @@
-"""Graph nodes: retrieval, the judgement nodes, the deadline, officer review and sending.
+"""Graph nodes: the judgement nodes, the deadline, retrieval, officer review and sending.
 
 The deterministic routing and escalation rule live in `foi_agent.rules`.
 """
@@ -18,16 +18,24 @@ from langchain_typesafe import Choice, TypeSafeClassifier
 from langgraph.graph import END
 from langgraph.types import Command, interrupt
 
-from foi_agent.deadline import foi_deadline
-from foi_agent.prompts import ASSESS_SYSTEM, DRAFT_SYSTEM, REGIME_CRITERIA, REGIME_INSTRUCTIONS
+from foi_agent.deadline import foi_deadline, sar_deadline
+from foi_agent.prompts import (
+    ASSESS_SYSTEM,
+    CHECK_REGIME_SYSTEM,
+    DRAFT_SYSTEM,
+    REGIME_CRITERIA,
+    REGIME_INSTRUCTIONS,
+)
 from foi_agent.retrieval import load_records, search
-from foi_agent.state import Assessment, FOIState
+from foi_agent.state import Assessment, FOIState, RegimeCheck
 
 DEFAULT_MODEL = "openai:gpt-6-luna"
 DEFAULT_CLASSIFIER_MODEL = "semif-qwen3.5-4b"
 GATEWAY_URL = "https://gateway.smith.langchain.com"
 EVIDENCE_SOURCES = ("disclosure_log", "publication_scheme", "exemption_guidance")
 RETRIEVAL_K = 3  # records per source
+# The deadline rule for each regime the classifier can give. Business as usual has no deadline.
+DEADLINE_RULES = {"FOI": foi_deadline, "EIR": foi_deadline, "SAR": sar_deadline}
 
 
 def model_name() -> str:
@@ -101,9 +109,30 @@ def classify_regime(state: FOIState) -> dict:
     return {"regime": answer.choice, "regime_scores": dict(answer.probabilities)}
 
 
+def check_regime(state: FOIState) -> dict:
+    """A second, independent view of the regime from the main LLM.
+
+    The classifier is confidently wrong too often for its probabilities to guard an automatic
+    reply, so the rules act on their own only when this check agrees. It is not shown the
+    classifier's answer.
+    """
+    prompt = f"Request:\n{state['request']}\n\nICO guidance:\n\n{regime_guidance()}"
+    model = _model().with_structured_output(RegimeCheck)
+    check = model.invoke([SystemMessage(CHECK_REGIME_SYSTEM), HumanMessage(prompt)])
+    return {"regime_check": check.regime, "regime_check_reason": check.reasoning}
+
+
 def compute_deadline(state: FOIState) -> dict:
+    """The response deadline under the classifier's regime, before any routing.
+
+    Every case gets one, escalated ones included, except business as usual, which has none.
+    """
     received = date.fromisoformat(state["received"]) if state.get("received") else date.today()
-    return {"received": received.isoformat(), "deadline": foi_deadline(received).isoformat()}
+    update = {"received": received.isoformat()}
+    rule = DEADLINE_RULES.get(state.get("regime"))
+    if rule:
+        update["deadline"] = rule(received).isoformat()
+    return update
 
 
 def retrieve_evidence(state: FOIState) -> dict:

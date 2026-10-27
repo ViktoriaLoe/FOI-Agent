@@ -1,4 +1,4 @@
-"""End-to-end runs of the graph with the three LLM nodes replaced by fakes (no network)."""
+"""End-to-end runs of the graph with the four model nodes replaced by fakes (no network)."""
 
 import json
 import uuid
@@ -20,6 +20,10 @@ from foi_agent.prompts import PROMPT_VERSION
 from foi_agent.retrieval import corpus_version
 
 SALARIES_REQUEST = "Please send me the senior officer salaries for 2025/26."
+SAR_REQUEST = "Send me everything you hold about me."
+POLISH_REQUEST = (
+    "Dzień dobry, ile zarabiał dyrektor generalny rady w roku 2025/26 i czy dostał premię?"
+)
 
 
 def assessment(**overrides):
@@ -36,17 +40,42 @@ def assessment(**overrides):
 
 @pytest.fixture
 def run(monkeypatch, tmp_path):
-    """A function that builds the graph with fake LLM nodes returning the given outputs."""
-    monkeypatch.setenv("FOI_OUTPUT_DIR", str(tmp_path))
+    """A function that builds the graph with fake model nodes returning the given outputs.
 
-    def build(regime, fake_assessment=None, regime_scores=None):
+    The regime check agrees with the classifier unless `check` says otherwise. The FOI nodes
+    record their names in `run.visited` when they run.
+    """
+    monkeypatch.setenv("FOI_OUTPUT_DIR", str(tmp_path))
+    visited = []
+
+    def recorded(name, fn):
+        def node(state):
+            visited.append(name)
+            return fn(state)
+
+        return node
+
+    def build(regime, fake_assessment=None, regime_scores=None, check=None):
         scores = regime_scores or {regime: 0.9}
+        regime_check = {"regime_check": check or regime, "regime_check_reason": "Fake check."}
         monkeypatch.setattr(
             nodes, "classify_regime", lambda state: {"regime": regime, "regime_scores": scores}
         )
-        monkeypatch.setattr(nodes, "assess", lambda state: {"assessment": fake_assessment})
-        monkeypatch.setattr(nodes, "draft_reply", lambda state: {"draft": "Fake draft reply."})
+        monkeypatch.setattr(nodes, "check_regime", lambda state: regime_check)
+        monkeypatch.setattr(
+            nodes, "retrieve_evidence", recorded("retrieve_evidence", nodes.retrieve_evidence)
+        )
+        monkeypatch.setattr(
+            nodes, "assess", recorded("assess", lambda state: {"assessment": fake_assessment})
+        )
+        monkeypatch.setattr(
+            nodes,
+            "draft_reply",
+            recorded("draft_reply", lambda state: {"draft": "Fake draft reply."}),
+        )
         return build_graph(checkpointer=InMemorySaver())
+
+    build.visited = visited
 
     return build
 
@@ -60,13 +89,14 @@ def log_lines(tmp_path):
     return [json.loads(line) for line in lines]
 
 
-def test_sar_is_routed(run, tmp_path):
+def test_sar_is_routed_with_the_sar_deadline(run, tmp_path):
     graph, cfg = run("SAR"), config()
-    result = graph.invoke({"request": "Send me everything you hold about me."}, cfg)
+    result = graph.invoke({"request": SAR_REQUEST, "received": "2026-10-26"}, cfg)
 
     assert result["outcome"] == "routed"
     assert "__interrupt__" not in result
-    assert "deadline" not in result  # left before any FOI work
+    assert result["deadline"] == "2026-11-26"  # one calendar month
+    assert run.visited == []  # left before any FOI work
     outbox_file = tmp_path / "outbox" / f"{cfg['configurable']['thread_id']}.txt"
     assert "Data Protection team" in outbox_file.read_text(encoding="utf-8")
     assert log_lines(tmp_path)[0]["outcome"] == "routed"
@@ -86,6 +116,7 @@ def test_foi_signpost_to_retrieved_publication_is_sent(run, tmp_path):
     result = graph.invoke({"request": SALARIES_REQUEST, "received": "2026-10-26"}, cfg)
 
     assert "PS-003" in [doc["id"] for doc in result["evidence"]]
+    assert run.visited == ["retrieve_evidence", "assess", "draft_reply"]
     assert "__interrupt__" not in result
     assert result["action"] == "send"
     assert result["deadline"] == "2026-11-23"
@@ -139,10 +170,11 @@ class MetadataRecorder(BaseCallbackHandler):
 def test_every_step_is_traced_with_run_metadata(run):
     graph, recorder = run("SAR"), MetadataRecorder()
     cfg = {**config(), "callbacks": [recorder], "tags": ["test"]}
-    graph.invoke({"request": "Send me everything you hold about me."}, cfg)
+    graph.invoke({"request": SAR_REQUEST}, cfg)
 
     assert "foi_triage" in recorder.steps  # the root run
-    for step in ("foi_triage", "classify_regime", "route_non_foi", "log_and_send"):
+    steps = ("foi_triage", "classify_regime", "check_regime", "compute_deadline", "route_non_foi")
+    for step in (*steps, "log_and_send"):
         metadata = recorder.steps[step]["metadata"]
         assert metadata["prompt_version"] == PROMPT_VERSION
         assert metadata["corpus_version"] == corpus_version()
@@ -152,24 +184,92 @@ def test_every_step_is_traced_with_run_metadata(run):
         assert "test" in recorder.steps[step]["tags"]
 
 
-def test_eir_waits_for_review(run):
+def test_eir_waits_for_review_with_a_deadline(run):
     graph, cfg = run("EIR"), config()
-    result = graph.invoke({"request": "Air quality readings near the incinerator."}, cfg)
+    request = "Air quality readings near the incinerator."
+    result = graph.invoke({"request": request, "received": "2026-10-26"}, cfg)
 
     assert graph.get_state(cfg).next == ("human_review",)
     payload = result["__interrupt__"][0].value
     assert payload["escalation_reasons"] == ["Environmental information: handle under the EIR."]
+    assert payload["deadline"] == "2026-11-23"  # 20 working days, as for FOI
+
+
+def test_bau_is_routed_with_no_deadline(run, tmp_path):
+    graph, cfg = run("BAU"), config()
+    request = "My green bin hasn't been emptied for two weeks running."
+    result = graph.invoke({"request": request, "received": "2026-10-26"}, cfg)
+
+    assert result["outcome"] == "routed"
+    assert result["received"] == "2026-10-26"
+    assert "deadline" not in result
+    outbox_file = tmp_path / "outbox" / f"{cfg['configurable']['thread_id']}.txt"
+    assert "Customer Services" in outbox_file.read_text(encoding="utf-8")
 
 
 def test_unclear_foi_waits_for_review_before_any_foi_work(run):
     scores = {"FOI": 0.48, "SAR": 0.41, "EIR": 0.06, "BAU": 0.05}
     graph, cfg = run("FOI", regime_scores=scores), config()
-    result = graph.invoke({"request": "Send me the notes on my housing banding decision."}, cfg)
+    request = "Send me the notes on my housing banding decision."
+    result = graph.invoke({"request": request, "received": "2026-10-26"}, cfg)
 
     assert graph.get_state(cfg).next == ("human_review",)
-    assert "deadline" not in result
+    assert run.visited == []
+    assert result["deadline"] == "2026-11-23"  # the classifier's regime picks the rule
     payload = result["__interrupt__"][0].value
     assert payload["escalation_reasons"] == ["Regime unclear: FOI 0.48, SAR 0.41."]
+
+
+def test_sar_the_check_disagrees_with_waits_for_review_and_is_not_routed(run, tmp_path):
+    graph = run("SAR", regime_scores={"SAR": 0.97, "FOI": 0.03}, check="FOI")
+    cfg = config()
+    request = "Please provide the names and salaries of the chief executive and directors."
+    result = graph.invoke({"request": request}, cfg)
+
+    assert graph.get_state(cfg).next == ("human_review",)
+    assert result["action"] == "escalate"
+    assert "draft" not in result  # no SAR acknowledgement written
+    payload = result["__interrupt__"][0].value
+    assert payload["escalation_reasons"] == ["Regime check disagrees: classifier SAR, check FOI."]
+    assert not (tmp_path / "outbox").exists()
+
+
+def test_foi_signpost_the_check_disagrees_with_leaves_before_foi_work(run, tmp_path):
+    # The baseline's one unsafe send: recycling rates classified FOI and sent as a signpost.
+    signpost = assessment(
+        already_published=True,
+        published_id="PS-003",
+        recommended_decision="signpost",
+        cited_ids=["PS-003"],
+    )
+    graph, cfg = run("FOI", signpost, check="EIR"), config()
+    result = graph.invoke({"request": "What were the recycling rates in 2025/26?"}, cfg)
+
+    assert graph.get_state(cfg).next == ("human_review",)
+    assert run.visited == []
+    assert result["action"] == "escalate"
+    assert result["__interrupt__"][0].value["escalation_reasons"] == [
+        "Regime check disagrees: classifier FOI, check EIR."
+    ]
+    assert not (tmp_path / "outbox").exists()
+
+
+def test_a_request_not_in_english_waits_for_review_before_any_foi_work(run, tmp_path):
+    signpost = assessment(
+        already_published=True,
+        published_id="PS-003",
+        recommended_decision="signpost",
+        cited_ids=["PS-003"],
+    )
+    graph, cfg = run("FOI", signpost), config()
+    result = graph.invoke({"request": POLISH_REQUEST}, cfg)
+
+    assert graph.get_state(cfg).next == ("human_review",)
+    assert run.visited == []
+    assert result["__interrupt__"][0].value["escalation_reasons"] == [
+        "The request may not be in English."
+    ]
+    assert not (tmp_path / "outbox").exists()
 
 
 @pytest.mark.parametrize(

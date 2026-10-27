@@ -37,8 +37,9 @@ def build_graph(checkpointer=None):
     builder = StateGraph(FOIState, input_schema=InputState)
 
     builder.add_node("classify_regime", nodes.classify_regime, retry_policy=classifier_retry)
-    builder.add_node("route_non_foi", rules.route_non_foi)
+    builder.add_node("check_regime", nodes.check_regime, retry_policy=llm_retry)
     builder.add_node("compute_deadline", nodes.compute_deadline)
+    builder.add_node("route_non_foi", rules.route_non_foi)
     builder.add_node("retrieve_evidence", nodes.retrieve_evidence)
     builder.add_node("assess", nodes.assess, retry_policy=llm_retry)
     builder.add_node("decide_action", rules.decide_action)
@@ -46,14 +47,17 @@ def build_graph(checkpointer=None):
     builder.add_node("human_review", nodes.human_review)
     builder.add_node("log_and_send", nodes.log_and_send)
 
+    # Every case gets the second opinion and its deadline before routing, so a case escalated
+    # before FOI work still reaches the officer with both.
     builder.add_edge(START, "classify_regime")
+    builder.add_edge("classify_regime", "check_regime")
+    builder.add_edge("check_regime", "compute_deadline")
     builder.add_conditional_edges(
-        "classify_regime", rules.route_by_regime, ["compute_deadline", "route_non_foi"]
+        "compute_deadline", rules.route_by_regime, ["retrieve_evidence", "route_non_foi"]
     )
     builder.add_conditional_edges(
         "route_non_foi", rules.route_by_action, ["human_review", "log_and_send"]
     )
-    builder.add_edge("compute_deadline", "retrieve_evidence")
     builder.add_edge("retrieve_evidence", "assess")
     builder.add_edge("assess", "decide_action")
     builder.add_edge("decide_action", "draft_reply")

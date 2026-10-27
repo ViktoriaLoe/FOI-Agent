@@ -1,4 +1,4 @@
-"""Graph state and the structured output the assess node returns.
+"""Graph state and the structured output the LLM nodes return.
 
 State holds plain JSON-serialisable values, so model outputs are stored with `.model_dump()`.
 """
@@ -57,6 +57,26 @@ class Assessment(BaseModel):
     )
 
 
+class RegimeCheck(BaseModel):
+    """An independent second opinion on which access regime applies to a request."""
+
+    reasoning: str = Field(
+        description=(
+            "Think this through before deciding: who the information is about (the requester "
+            "themselves or someone they act for, other people such as staff or councillors, or "
+            "nobody in particular), whether it is environmental, and whether the requester wants "
+            "recorded information or wants the council to do something."
+        )
+    )
+    regime: Regime = Field(
+        description=(
+            "SAR only if the requester wants their own personal data or that of someone they act "
+            "for; EIR for environmental information, whatever the requester calls it; BAU for a "
+            "service request, complaint or routine enquiry; otherwise FOI."
+        )
+    )
+
+
 class InputState(TypedDict):
     """What a caller provides to start a case."""
 
@@ -69,6 +89,8 @@ class FOIState(InputState, total=False):
 
     regime: Regime
     regime_scores: dict[str, float]  # the classifier's probability for each regime
+    regime_check: Regime  # the independent check's regime
+    regime_check_reason: str
     deadline: str  # ISO date
     evidence: list[dict]
     assessment: dict

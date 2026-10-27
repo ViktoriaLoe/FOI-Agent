@@ -3,6 +3,7 @@ import pytest
 from foi_agent.rules import (
     REGIME_MIN_PROB,
     SIGN_OFF,
+    automatic_action_blockers,
     decide_action,
     route_by_action,
     route_by_regime,
@@ -15,6 +16,12 @@ DL_RELEASED = {"source": "disclosure_log", "id": "DL-1", "outcome": "released"}
 DL_PART = {"source": "disclosure_log", "id": "DL-2", "outcome": "part released"}
 EVIDENCE = [PS_003, EX_S40, DL_RELEASED, DL_PART]
 
+SALARIES_REQUEST = "Please send me the senior officer salaries for 2025/26."
+POLISH_REQUEST = (
+    "Dzień dobry, ile zarabiał dyrektor generalny rady w roku 2025/26 i czy dostał premię?"
+)
+NOT_ENGLISH = "The request may not be in English."
+
 
 def signpost(published_id="PS-003", **overrides):
     assessment = {
@@ -24,25 +31,23 @@ def signpost(published_id="PS-003", **overrides):
         "recommended_decision": "signpost",
         "cited_ids": [published_id],
     }
-    return {"regime": "FOI", "evidence": EVIDENCE, "assessment": {**assessment, **overrides}}
+    return {
+        "request": SALARIES_REQUEST,
+        "regime": "FOI",
+        "regime_check": "FOI",
+        "evidence": EVIDENCE,
+        "assessment": {**assessment, **overrides},
+    }
 
 
-@pytest.mark.parametrize(
-    ("regime", "branch"),
-    [
-        ("FOI", "compute_deadline"),
-        ("EIR", "route_non_foi"),
-        ("SAR", "route_non_foi"),
-        ("BAU", "route_non_foi"),
-    ],
-)
-def test_route_by_regime(regime, branch):
-    assert route_by_regime({"regime": regime}) == branch
-
-
-def classified(regime, scores):
-    """State after classify_regime: the top label and the distribution."""
-    return {"regime": regime, "regime_scores": scores}
+def classified(regime, scores, check=None, request=SALARIES_REQUEST):
+    """State after classify_regime and check_regime. The check agrees unless told otherwise."""
+    return {
+        "request": request,
+        "regime": regime,
+        "regime_scores": scores,
+        "regime_check": check or regime,
+    }
 
 
 CLEAR_FOI = classified("FOI", {"FOI": 0.91, "EIR": 0.05, "SAR": 0.03, "BAU": 0.01})
@@ -50,29 +55,131 @@ UNCLEAR_FOI = classified("FOI", {"FOI": 0.48, "SAR": 0.41, "EIR": 0.06, "BAU": 0
 CLEAR_SAR = classified("SAR", {"SAR": 0.88, "FOI": 0.10, "EIR": 0.01, "BAU": 0.01})
 UNCLEAR_SAR = classified("SAR", {"SAR": 0.45, "BAU": 0.30, "FOI": 0.20, "EIR": 0.05})
 CLEAR_BAU = classified("BAU", {"BAU": 0.95, "FOI": 0.03, "SAR": 0.01, "EIR": 0.01})
+CLEAR_EIR = classified("EIR", {"EIR": 0.90, "FOI": 0.08, "SAR": 0.01, "BAU": 0.01})
 
 
-def test_clear_foi_continues_to_foi_work():
-    assert route_by_regime(CLEAR_FOI) == "compute_deadline"
+# --- The blockers -----------------------------------------------------------------------------
+
+
+def test_nothing_blocks_a_clear_regime_the_check_agrees_with():
+    assert automatic_action_blockers(CLEAR_FOI) == []
+
+
+def test_an_unclear_regime_blocks():
+    assert automatic_action_blockers(UNCLEAR_FOI) == ["Regime unclear: FOI 0.48, SAR 0.41."]
+
+
+def test_a_disagreeing_check_blocks():
+    state = classified("SAR", CLEAR_SAR["regime_scores"], check="FOI")
+    assert automatic_action_blockers(state) == [
+        "Regime check disagrees: classifier SAR, check FOI."
+    ]
+
+
+def test_a_missing_check_blocks():
+    state = {**CLEAR_SAR, "regime_check": None}
+    assert automatic_action_blockers(state) == ["No independent regime check was made."]
+
+
+def test_a_request_that_may_not_be_in_english_blocks():
+    state = classified("FOI", CLEAR_FOI["regime_scores"], request=POLISH_REQUEST)
+    assert automatic_action_blockers(state) == [NOT_ENGLISH]
+
+
+def test_every_blocker_that_applies_is_listed():
+    state = classified("SAR", UNCLEAR_SAR["regime_scores"], check="FOI", request=POLISH_REQUEST)
+    assert automatic_action_blockers(state) == [
+        "Regime unclear: SAR 0.45, BAU 0.30.",
+        "Regime check disagrees: classifier SAR, check FOI.",
+        NOT_ENGLISH,
+    ]
+
+
+# One state per blocker, applied to a case that would otherwise act on its own.
+def blocked(state, blocker):
+    if blocker == "unclear":
+        top = state["regime"]
+        others = [r for r in ("FOI", "EIR", "SAR", "BAU") if r != top]
+        return {**state, "regime_scores": {top: 0.5, others[0]: 0.4, others[1]: 0.1}}
+    if blocker == "disagrees":
+        return {**state, "regime_check": "EIR"}
+    return {**state, "request": POLISH_REQUEST}
+
+
+BLOCKERS = ["unclear", "disagrees", "not_english"]
+
+
+# --- Routing by regime ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("state", "branch"),
+    [
+        (CLEAR_FOI, "retrieve_evidence"),
+        (CLEAR_EIR, "route_non_foi"),
+        (CLEAR_SAR, "route_non_foi"),
+        (CLEAR_BAU, "route_non_foi"),
+    ],
+)
+def test_route_by_regime(state, branch):
+    assert route_by_regime(state) == branch
 
 
 def test_foi_exactly_at_the_threshold_continues():
     state = classified("FOI", {"FOI": REGIME_MIN_PROB, "SAR": 1 - REGIME_MIN_PROB})
-    assert route_by_regime(state) == "compute_deadline"
+    assert route_by_regime(state) == "retrieve_evidence"
 
 
-def test_unclear_foi_leaves_before_foi_work_and_escalates():
-    assert route_by_regime(UNCLEAR_FOI) == "route_non_foi"
+@pytest.mark.parametrize("blocker", BLOCKERS)
+def test_blocked_foi_leaves_before_foi_work_and_escalates(blocker):
+    state = blocked(CLEAR_FOI, blocker)
+    assert route_by_regime(state) == "route_non_foi"
+    result = route_non_foi(state)
+    assert result["action"] == "escalate"
+    assert result["escalation_reasons"] == automatic_action_blockers(state) != []
+    assert "draft" not in result
+
+
+def test_unclear_foi_escalates_with_the_two_likeliest_regimes():
     assert route_non_foi(UNCLEAR_FOI) == {
         "action": "escalate",
         "escalation_reasons": ["Regime unclear: FOI 0.48, SAR 0.41."],
     }
 
 
-@pytest.mark.parametrize("state", [CLEAR_SAR, CLEAR_BAU])
-def test_clear_sar_and_bau_are_routed(state):
+def test_foi_the_check_calls_sar_leaves_before_foi_work():
+    state = classified("FOI", CLEAR_FOI["regime_scores"], check="SAR")
     assert route_by_regime(state) == "route_non_foi"
+    assert route_non_foi(state)["escalation_reasons"] == [
+        "Regime check disagrees: classifier FOI, check SAR."
+    ]
+
+
+# --- Routing SAR and business as usual --------------------------------------------------------
+
+
+@pytest.mark.parametrize("state", [CLEAR_SAR, CLEAR_BAU])
+def test_clear_sar_and_bau_are_routed_when_the_check_agrees(state):
     assert route_non_foi(state)["action"] == "route"
+
+
+@pytest.mark.parametrize("state", [CLEAR_SAR, CLEAR_BAU])
+@pytest.mark.parametrize("blocker", BLOCKERS)
+def test_sar_and_bau_escalate_instead_of_routing_when_blocked(state, blocker):
+    state = blocked(state, blocker)
+    result = route_non_foi(state)
+    assert result["action"] == "escalate"
+    assert result["escalation_reasons"] == automatic_action_blockers(state) != []
+    assert "draft" not in result
+
+
+def test_sar_the_check_calls_foi_escalates():
+    # The six wrong automatic routes in the baseline were FOI requests routed as SARs.
+    state = classified("SAR", CLEAR_SAR["regime_scores"], check="FOI")
+    assert route_non_foi(state) == {
+        "action": "escalate",
+        "escalation_reasons": ["Regime check disagrees: classifier SAR, check FOI."],
+    }
 
 
 def test_unclear_sar_escalates_instead_of_routing():
@@ -83,7 +190,7 @@ def test_unclear_sar_escalates_instead_of_routing():
 
 
 def test_sar_is_routed_to_data_protection():
-    result = route_non_foi({"regime": "SAR"})
+    result = route_non_foi(CLEAR_SAR)
     assert result["action"] == "route"
     assert "Data Protection team" in result["draft"]
     assert "one calendar month" in result["draft"]
@@ -92,22 +199,65 @@ def test_sar_is_routed_to_data_protection():
 
 
 def test_bau_is_routed_to_customer_services():
-    result = route_non_foi({"regime": "BAU"})
+    result = route_non_foi(CLEAR_BAU)
     assert result["action"] == "route"
     assert "Customer Services" in result["draft"]
     assert SIGN_OFF in result["draft"]
 
 
-def test_eir_is_escalated():
-    assert route_non_foi({"regime": "EIR"}) == {
+def test_eir_is_escalated_even_when_the_check_agrees():
+    assert route_non_foi(CLEAR_EIR) == {
         "action": "escalate",
         "escalation_reasons": ["Environmental information: handle under the EIR."],
     }
 
 
+def test_eir_escalation_also_lists_the_blockers():
+    state = classified("EIR", CLEAR_EIR["regime_scores"], check="FOI")
+    assert route_non_foi(state)["escalation_reasons"] == [
+        "Environmental information: handle under the EIR.",
+        "Regime check disagrees: classifier EIR, check FOI.",
+    ]
+
+
+def test_unrecognised_regime_escalates():
+    result = route_non_foi(classified("OTHER", {"OTHER": 0.9}))
+    assert result == {"action": "escalate", "escalation_reasons": ["Unrecognised regime: 'OTHER'."]}
+
+
+# --- The send rule ----------------------------------------------------------------------------
+
+
 @pytest.mark.parametrize("published_id", ["PS-003", "DL-1"])
 def test_clean_signpost_to_released_information_is_sent(published_id):
     assert decide_action(signpost(published_id)) == {"action": "send", "escalation_reasons": []}
+
+
+@pytest.mark.parametrize("blocker", BLOCKERS)
+def test_a_clean_signpost_is_not_sent_when_blocked(blocker):
+    state = blocked(signpost(), blocker)
+    result = decide_action(state)
+    assert result["action"] == "escalate"
+    assert result["escalation_reasons"] == automatic_action_blockers(state) != []
+
+
+def test_a_signpost_with_no_regime_check_is_not_sent():
+    state = {**signpost(), "regime_check": None}
+    assert decide_action(state) == {
+        "action": "escalate",
+        "escalation_reasons": ["No independent regime check was made."],
+    }
+
+
+def test_blockers_are_added_to_the_other_reasons():
+    state = {
+        **signpost(exemptions=[{"section": "s43", "reason": "Unit rates"}]),
+        "regime_check": "EIR",
+    }
+    assert decide_action(state)["escalation_reasons"] == [
+        "Possible exemptions to consider: s43.",
+        "Regime check disagrees: classifier FOI, check EIR.",
+    ]
 
 
 def test_decision_other_than_signpost_escalates_with_one_reason():

@@ -6,6 +6,7 @@ The model proposes and this code decides. Nothing here calls an LLM.
 import re
 from typing import Literal
 
+from foi_agent.language import is_probably_english
 from foi_agent.state import FOIState
 
 SIGN_OFF = "Information Governance Team, Northbrook Borough Council"
@@ -51,29 +52,55 @@ def _unclear_reason(state: FOIState) -> str:
     return "Regime unclear: " + ", ".join(f"{label} {p:.2f}" for label, p in top) + "."
 
 
-def route_by_regime(state: FOIState) -> Literal["compute_deadline", "route_non_foi"]:
-    """Clear FOI continues to FOI work. Everything else, unclear FOI included, leaves before it."""
-    if state.get("regime") == "FOI" and not _regime_unclear(state):
-        return "compute_deadline"
+def automatic_action_blockers(state: FOIState) -> list[str]:
+    """Why the agent must not act on its own, by sending a reply or routing a case. Empty if
+    nothing stands in the way.
+
+    The classifier is confidently wrong too often for its probabilities alone to guard an
+    automatic action, so an independent check must agree with it. A case with no check is
+    blocked, since there is nothing to confirm the regime.
+    """
+    blockers = []
+    if _regime_unclear(state):
+        blockers.append(_unclear_reason(state))
+    regime, check = state.get("regime"), state.get("regime_check")
+    if check is None:
+        blockers.append("No independent regime check was made.")
+    elif check != regime:
+        blockers.append(f"Regime check disagrees: classifier {regime}, check {check}.")
+    if not is_probably_english(state.get("request") or ""):
+        blockers.append("The request may not be in English.")
+    return blockers
+
+
+def route_by_regime(state: FOIState) -> Literal["retrieve_evidence", "route_non_foi"]:
+    """FOI continues to FOI work only if nothing blocks it. Everything else leaves before it."""
+    if state.get("regime") == "FOI" and not automatic_action_blockers(state):
+        return "retrieve_evidence"
     return "route_non_foi"
 
 
 def route_non_foi(state: FOIState) -> dict:
-    """Acknowledge SAR and business-as-usual requests; escalate EIR and unclear regimes."""
-    if _regime_unclear(state):
-        return {"action": "escalate", "escalation_reasons": [_unclear_reason(state)]}
+    """Acknowledge SAR and business-as-usual requests if nothing blocks an automatic action.
+
+    Escalate everything else: EIR always, and any case with a blocker, FOI included.
+    """
     regime = state.get("regime")
-    if regime in _ROUTED_REPLIES:
+    blockers = automatic_action_blockers(state)
+    if regime in _ROUTED_REPLIES and not blockers:
         return {"action": "route", "draft": _ROUTED_REPLIES[regime]}
     if regime == "EIR":
-        reason = "Environmental information: handle under the EIR."
+        reasons = ["Environmental information: handle under the EIR."]
+    elif regime == "FOI" or regime in _ROUTED_REPLIES:
+        reasons = []
     else:
-        reason = f"Unrecognised regime: {regime!r}."
-    return {"action": "escalate", "escalation_reasons": [reason]}
+        reasons = [f"Unrecognised regime: {regime!r}."]
+    return {"action": "escalate", "escalation_reasons": reasons + blockers}
 
 
 def decide_action(state: FOIState) -> dict:
-    """Send only a clean signpost to information the council has already released.
+    """Send only a clean signpost to information the council has already released, when
+    nothing blocks an automatic action.
 
     Anything else escalates to an FOI officer, with one reason for each condition that failed.
     """
@@ -111,6 +138,7 @@ def decide_action(state: FOIState) -> dict:
                 "not released in full."
             )
 
+    reasons += automatic_action_blockers(state)
     return {"action": "escalate" if reasons else "send", "escalation_reasons": reasons}
 
 
