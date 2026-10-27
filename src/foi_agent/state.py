@@ -1,10 +1,13 @@
 """Graph state and the structured output the LLM nodes return.
 
-State holds plain JSON-serialisable values, so model outputs are stored with `.model_dump()`.
+State holds plain JSON-serialisable values, so model outputs are stored with `.model_dump()`. The
+one exception is `investigation`, the search tool's messages.
 """
 
-from typing import Literal, NotRequired
+from typing import Annotated, Literal, NotRequired
 
+from langchain_core.messages import AnyMessage
+from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
@@ -92,7 +95,9 @@ class FOIState(InputState, total=False):
     regime_check: Regime  # the independent check's regime
     regime_check_reason: str
     deadline: str  # ISO date
-    evidence: list[dict]
+    evidence: list[dict]  # search tool hits are tagged "found_by": "search_tool"
+    investigation: Annotated[list[AnyMessage], add_messages]  # the search tool conversation
+    searches: list[dict]  # each tool search: its source, query and the ids it returned
     assessment: dict
     action: Action
     escalation_reasons: list[str]

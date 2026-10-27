@@ -1,5 +1,7 @@
 """The FOI triage graph. See README.md for the flow."""
 
+import os
+
 from langchain_typesafe.client import TypeSafeAPIConnectionError, TypeSafeInternalServerError
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
@@ -10,9 +12,19 @@ from foi_agent.retrieval import corpus_version
 from foi_agent.state import FOIState, InputState
 
 
-def run_metadata() -> dict:
+def search_tool_enabled() -> bool:
+    """Whether the graph includes the search tool. On unless FOI_SEARCH_TOOL is 0, false or off."""
+    return os.environ.get("FOI_SEARCH_TOOL", "").strip().lower() not in {"0", "false", "off"}
+
+
+def run_metadata(search_tool: bool | None = None) -> dict:
     """What produced a run. Attached to every trace, so runs and experiments can be filtered
-    and compared by model, prompt version, retriever and knowledge base."""
+    and compared by model, prompt version, retriever, search tool and knowledge base.
+
+    `search_tool` is read from FOI_SEARCH_TOOL when None, as in build_graph.
+    """
+    if search_tool is None:
+        search_tool = search_tool_enabled()
     return {
         "model": nodes.model_name(),
         "classifier_model": nodes.classifier_model_name(),
@@ -20,14 +32,22 @@ def run_metadata() -> dict:
         "retriever": "bm25",
         "retrieval_k": nodes.RETRIEVAL_K,
         "corpus_version": corpus_version(),
+        "search_tool": search_tool,
+        "max_searches": rules.MAX_SEARCHES,
     }
 
 
-def build_graph(checkpointer=None):
+def build_graph(checkpointer=None, search_tool: bool | None = None):
     """Compile the graph.
+
+    With the search tool, evidence retrieval is followed by up to MAX_SEARCHES searches the model
+    asks for. Without it, as in v1, retrieval goes straight to assess. `search_tool` is read from
+    FOI_SEARCH_TOOL when None.
 
     Nodes are looked up through their modules at build time, so tests can monkeypatch them.
     """
+    if search_tool is None:
+        search_tool = search_tool_enabled()
     llm_retry = RetryPolicy(max_attempts=3)
     # The default policy retries every TypeSafe error, so a bad key, an unknown model or a rate
     # limit would be sent three times. Retry only server errors, dropped connections and timeouts.
@@ -41,6 +61,9 @@ def build_graph(checkpointer=None):
     builder.add_node("compute_deadline", nodes.compute_deadline)
     builder.add_node("route_non_foi", rules.route_non_foi)
     builder.add_node("retrieve_evidence", nodes.retrieve_evidence)
+    if search_tool:
+        builder.add_node("investigate", nodes.investigate, retry_policy=llm_retry)
+        builder.add_node("run_searches", nodes.run_searches)
     builder.add_node("assess", nodes.assess, retry_policy=llm_retry)
     builder.add_node("decide_action", rules.decide_action)
     builder.add_node("draft_reply", nodes.draft_reply, retry_policy=llm_retry)
@@ -58,7 +81,14 @@ def build_graph(checkpointer=None):
     builder.add_conditional_edges(
         "route_non_foi", rules.route_by_action, ["human_review", "log_and_send"]
     )
-    builder.add_edge("retrieve_evidence", "assess")
+    if search_tool:
+        builder.add_edge("retrieve_evidence", "investigate")
+        builder.add_conditional_edges(
+            "investigate", rules.route_after_investigate, ["run_searches", "assess"]
+        )
+        builder.add_edge("run_searches", "investigate")
+    else:
+        builder.add_edge("retrieve_evidence", "assess")
     builder.add_edge("assess", "decide_action")
     builder.add_edge("decide_action", "draft_reply")
     builder.add_conditional_edges(
@@ -68,7 +98,7 @@ def build_graph(checkpointer=None):
     builder.add_edge("log_and_send", END)
 
     graph = builder.compile(checkpointer=checkpointer)
-    return graph.with_config({"run_name": "foi_triage", "metadata": run_metadata()})
+    return graph.with_config({"run_name": "foi_triage", "metadata": run_metadata(search_tool)})
 
 
 # For LangGraph Studio and `langgraph dev`, which supply their own checkpointer.

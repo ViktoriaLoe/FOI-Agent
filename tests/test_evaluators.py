@@ -13,7 +13,9 @@ from evals.evaluators import (
     regime_check_correct,
     regime_correct,
     retrieval_recall,
+    searches_made,
     sends_when_expected,
+    tool_found_relevant,
 )
 from evals.judge import JUDGE_VERSION, draft_judge
 from evals.run_experiment import evaluator_versions, full_evaluators, summarise
@@ -171,3 +173,49 @@ def test_regime_check_is_scored_against_the_label_and_skipped_without_one():
     assert score(regime_check_correct, {"regime": "FOI", "regime_check": "SAR"}, reference) == 0
     assert score(regime_check_correct, {"regime": "FOI"}, reference) is None
     assert score(regime_check_correct, {"regime_check": "FOI"}, {"action": "escalate"}) is None
+
+
+def tool_run(*evidence, searches=2):
+    searched = [
+        {"source": "publication_scheme", "query": f"q{i}", "ids": []} for i in range(searches)
+    ]
+    return {"evidence": list(evidence), "searches": searched}
+
+
+def test_searches_made_counts_tool_searches_and_skips_runs_without_the_tool():
+    assert score(searches_made, tool_run(searches=2), {}) == 2
+    assert score(searches_made, tool_run(searches=0), {}) == 0
+    assert score(searches_made, {"evidence": []}, {}) is None  # the tool was off
+    assert score(searches_made, {"regime": "SAR"}, {}) is None  # left before evidence
+
+
+def test_tool_found_relevant_counts_only_relevant_records_the_first_search_missed():
+    outputs = tool_run(
+        {"id": "PS-003"},  # found by the first search
+        {"id": "DL-2026-014", "found_by": "search_tool"},
+        {"id": "EX-S43", "found_by": "search_tool"},  # found by the tool, but not relevant
+    )
+    reference = {"relevant_ids": ["PS-003", "DL-2026-014", "EX-S40"]}
+    result = tool_found_relevant(outputs, reference)
+    assert result["score"] == 1
+    assert result["comment"] == "DL-2026-014"
+    assert score(tool_found_relevant, tool_run({"id": "PS-003"}), reference) == 0
+    assert score(tool_found_relevant, {"evidence": [{"id": "PS-003"}]}, reference) is None
+    assert score(tool_found_relevant, outputs, {"relevant_ids": []}) is None
+
+
+def test_summary_shows_counts_as_means_not_percentages():
+    def row(scores):
+        results = [SimpleNamespace(key=k, score=v) for k, v in scores.items()]
+        example = SimpleNamespace(metadata={"slice": "published", "category": "normal"})
+        return {"example": example, "evaluation_results": {"results": results}}
+
+    rows = [row({"searches_made": 3, "no_unsafe_send": 1}), row({"searches_made": 0})]
+    summary = summarise(rows, "test")
+    assert "| `searches_made` | 1.50 (n=2) |" in summary
+    assert "| `no_unsafe_send` | 100% (n=1) |" in summary
+
+
+def test_full_runs_include_the_trajectory_evaluators():
+    names = [e.__name__ for e in full_evaluators(judge=False)]
+    assert "searches_made" in names and "tool_found_relevant" in names

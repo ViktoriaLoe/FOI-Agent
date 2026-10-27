@@ -3,7 +3,8 @@
 Each takes `outputs` (the run's final state) and `reference_outputs` (the example's labels), the
 argument names LangSmith's `evaluate()` passes, and returns {"key", "score", "comment"}. Score 1
 is right and 0 is wrong. None means the example has no label for it, or the step it scores
-didn't run, so it doesn't count towards the average.
+didn't run, so it doesn't count towards the average. The trajectory evaluators are the exception:
+they score a count, for information, not a pass or fail.
 """
 
 from foi_agent.checks import section_number
@@ -162,3 +163,32 @@ LABEL_EVALUATORS = (
     deadline_correct,
     retrieval_recall,
 )
+
+
+def _tool_ran(outputs: dict) -> bool:
+    # investigate starts `searches` on its first call, so a run without the tool has no key.
+    return "searches" in outputs
+
+
+def searches_made(outputs: dict, reference_outputs: dict) -> dict:
+    """How many searches the search tool made. A count, for information."""
+    if not _tool_ran(outputs):
+        return _result("searches_made", None, "The search tool didn't run.")
+    searches = outputs["searches"]
+    comment = "; ".join(f"{s['source']}: {s['query']}" for s in searches)
+    return _result("searches_made", len(searches), comment)
+
+
+def tool_found_relevant(outputs: dict, reference_outputs: dict) -> dict:
+    """How many of the records a good search should find were found only by the search tool."""
+    relevant = set(reference_outputs.get("relevant_ids") or [])
+    if not _tool_ran(outputs) or not relevant:
+        return _result("tool_found_relevant", None, "The search tool didn't run, or no label.")
+    found = {d["id"] for d in outputs.get("evidence") or [] if d.get("found_by") == "search_tool"}
+    hits = sorted(relevant & found)
+    return _result("tool_found_relevant", len(hits), ", ".join(hits))
+
+
+# Scored as counts, so summaries show their mean as a number rather than a percentage.
+TRAJECTORY_EVALUATORS = (searches_made, tool_found_relevant)
+COUNT_KEYS = {e.__name__ for e in TRAJECTORY_EVALUATORS}

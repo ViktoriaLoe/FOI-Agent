@@ -2,10 +2,13 @@
 
     python -m evals.run_experiment --split dev [--slice published] [--limit 5]
                                    [--repetitions 2] [--no-judge] [--classify-only]
+                                   [--no-search-tool]
     python -m evals.run_experiment --rescore EXPERIMENT [--only KEY ...] [--judge]
 
-Each FOI case makes two OpenAI calls (assess and draft) and the judge one more, so start small.
-`--classify-only` runs just regime classification, which makes no OpenAI calls.
+Each FOI case makes three OpenAI calls (the regime check, assess and draft), one to three more
+for the search tool, and one for the judge, so start small. `--no-search-tool` runs the agent
+without the search tool, the other half of the search tool experiment. `--classify-only` runs
+just regime classification, which makes no OpenAI calls.
 
 The experiment records the agent's run metadata (model, prompt version, corpus version) and the
 checks and judge versions, and LangSmith adds the git commit. A summary by category and slice is
@@ -25,7 +28,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from dotenv import load_dotenv
-from evals.evaluators import LABEL_EVALUATORS, regime_correct
+from evals.evaluators import COUNT_KEYS, LABEL_EVALUATORS, TRAJECTORY_EVALUATORS, regime_correct
 from evals.judge import JUDGE_VERSION, draft_judge, judge_model_name
 from evals.upload_dataset import DATASET
 from langgraph.checkpoint.memory import InMemorySaver
@@ -33,15 +36,15 @@ from langsmith import Client, evaluate, evaluate_existing
 
 from foi_agent import nodes
 from foi_agent.checks import ALL_CHECKS, checks_version
-from foi_agent.graph import build_graph, run_metadata
+from foi_agent.graph import build_graph, run_metadata, search_tool_enabled
 from foi_agent.prompts import PROMPT_VERSION
 
 RESULTS = Path(__file__).parent / "results"
 HEADLINE = ("no_wrong_auto_action", "action_correct", "regime_correct", "decision_correct")
 
 
-def full_target(pause: float):
-    graph = build_graph(checkpointer=InMemorySaver())
+def full_target(pause: float, search_tool: bool):
+    graph = build_graph(checkpointer=InMemorySaver(), search_tool=search_tool)
 
     def target(inputs: dict) -> dict:
         state = graph.invoke(inputs, {"configurable": {"thread_id": str(uuid.uuid4())}})
@@ -64,7 +67,8 @@ def classify_target(inputs: dict) -> dict:
 
 def full_evaluators(judge: bool, only=None) -> list:
     """The checks and label evaluators, plus the judge if wanted, limited to `only` if given."""
-    evaluators = [*ALL_CHECKS, *LABEL_EVALUATORS] + ([draft_judge] if judge else [])
+    evaluators = [*ALL_CHECKS, *LABEL_EVALUATORS, *TRAJECTORY_EVALUATORS]
+    evaluators += [draft_judge] if judge else []
     if not only:
         return evaluators
     unknown = set(only) - {e.__name__ for e in evaluators}
@@ -82,7 +86,10 @@ def evaluator_versions(evaluators) -> dict:
 
 
 def summarise(results, title: str) -> str:
-    """Mean score per evaluator overall, by category, and by slice for the headline checks."""
+    """Mean score per evaluator overall, by category, and by slice for the headline checks.
+
+    Pass or fail scores are shown as percentages, and counts as plain means.
+    """
     overall, by_group = defaultdict(list), defaultdict(lambda: defaultdict(list))
     for row in results:
         metadata = row["example"].metadata or {}
@@ -93,11 +100,14 @@ def summarise(results, title: str) -> str:
             by_group[("category", metadata.get("category"))][result.key].append(result.score)
             by_group[("slice", metadata.get("slice"))][result.key].append(result.score)
 
-    def mean(scores):
-        return f"{sum(scores) / len(scores):.0%} (n={len(scores)})" if scores else "-"
+    def mean(scores, count=False):
+        if not scores:
+            return "-"
+        average = sum(scores) / len(scores)
+        return f"{average:.2f} (n={len(scores)})" if count else f"{average:.0%} (n={len(scores)})"
 
     lines = [f"# {title}", "", "| Evaluator | Score |", "| --- | --- |"]
-    lines += [f"| `{key}` | {mean(scores)} |" for key, scores in overall.items()]
+    lines += [f"| `{key}` | {mean(scores, key in COUNT_KEYS)} |" for key, scores in overall.items()]
     for group in ("category", "slice"):
         names = sorted(name for kind, name in by_group if kind == group)
         lines += ["", f"| {group.capitalize()} | " + " | ".join(HEADLINE) + " |"]
@@ -138,6 +148,9 @@ def main() -> None:
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--no-judge", action="store_true", help="Skip the LLM judge.")
     parser.add_argument("--classify-only", action="store_true", help="Classification only.")
+    parser.add_argument(
+        "--no-search-tool", action="store_true", help="Run the agent without the search tool."
+    )
     parser.add_argument("--pause", type=float, default=0, help="Seconds between examples.")
     parser.add_argument("--description", default="")
     parser.add_argument("--rescore", metavar="EXPERIMENT", help="Score an existing experiment.")
@@ -159,14 +172,16 @@ def main() -> None:
         if not args.slice or ex.metadata.get("slice") == args.slice
     ][: args.limit]
 
+    # FOI_SEARCH_TOOL=0 turns the tool off too, so the metadata always matches the graph.
+    search_tool = search_tool_enabled() and not args.no_search_tool
     if args.classify_only:
         target, evaluators, mode = classify_target, [regime_correct], "classify"
     else:
-        target, mode = full_target(args.pause), "full"
+        target, mode = full_target(args.pause, search_tool), "full"
         evaluators = full_evaluators(judge=not args.no_judge)
 
     metadata = (
-        run_metadata()
+        run_metadata(search_tool)
         | {
             "split": args.split,
             "slice": args.slice,
@@ -175,12 +190,13 @@ def main() -> None:
         }
         | evaluator_versions(evaluators)
     )
+    prefix = f"{PROMPT_VERSION}-{mode}-{args.split}" + ("" if search_tool else "-notool")
     print(f"Running {len(examples)} {args.split} examples ({mode}) x {args.repetitions}")
     results = evaluate(
         target,
         data=examples,
         evaluators=evaluators,
-        experiment_prefix=f"{PROMPT_VERSION}-{mode}-{args.split}",
+        experiment_prefix=prefix,
         description=args.description,
         metadata=metadata,
         num_repetitions=args.repetitions,

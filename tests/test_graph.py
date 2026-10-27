@@ -40,7 +40,8 @@ def assessment(**overrides):
 
 @pytest.fixture
 def run(monkeypatch, tmp_path):
-    """A function that builds the graph with fake model nodes returning the given outputs.
+    """A function that builds the graph, without the search tool, with fake model nodes returning
+    the given outputs. tests/test_search_tool.py covers the tool.
 
     The regime check agrees with the classifier unless `check` says otherwise. The FOI nodes
     record their names in `run.visited` when they run.
@@ -73,7 +74,7 @@ def run(monkeypatch, tmp_path):
             "draft_reply",
             recorded("draft_reply", lambda state: {"draft": "Fake draft reply."}),
         )
-        return build_graph(checkpointer=InMemorySaver())
+        return build_graph(checkpointer=InMemorySaver(), search_tool=False)
 
     build.visited = visited
 

@@ -1,13 +1,17 @@
 import pytest
+from langchain_core.messages import AIMessage, ToolMessage
 
 from foi_agent.rules import (
+    MAX_SEARCHES,
     REGIME_MIN_PROB,
     SIGN_OFF,
     automatic_action_blockers,
     decide_action,
+    route_after_investigate,
     route_by_action,
     route_by_regime,
     route_non_foi,
+    searches_left,
 )
 
 PS_003 = {"source": "publication_scheme", "id": "PS-003", "title": "Senior officer remuneration"}
@@ -347,3 +351,33 @@ def test_missing_published_id_escalates():
 )
 def test_route_by_action(action, next_node):
     assert route_by_action({"action": action}) == next_node
+
+
+ASKS = AIMessage("", tool_calls=[{"name": "search_records", "args": {}, "id": "call-1"}])
+DONE = AIMessage("The evidence is enough.")
+
+
+def made(n):
+    return [{"source": "disclosure_log", "query": "q", "ids": []}] * n
+
+
+def test_searches_left_counts_down_from_the_budget_and_stops_at_zero():
+    assert searches_left({}) == MAX_SEARCHES == 3
+    assert searches_left({"searches": made(2)}) == 1
+    assert searches_left({"searches": made(5)}) == 0
+
+
+@pytest.mark.parametrize(
+    ("messages", "searches", "route"),
+    [
+        ([ASKS], 0, "run_searches"),
+        ([ASKS], MAX_SEARCHES - 1, "run_searches"),
+        ([ASKS], MAX_SEARCHES, "assess"),  # the budget is used, however many the model wants
+        ([DONE], 0, "assess"),  # the model stopped
+        ([ASKS, ToolMessage("Searches left: 0.", tool_call_id="call-1")], MAX_SEARCHES, "assess"),
+        ([], 0, "assess"),
+    ],
+)
+def test_searches_run_only_when_asked_for_and_within_the_budget(messages, searches, route):
+    state = {"investigation": messages, "searches": made(searches)}
+    assert route_after_investigate(state) == route

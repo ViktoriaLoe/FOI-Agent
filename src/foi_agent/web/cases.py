@@ -40,6 +40,8 @@ PIPELINE = (
     ("compute_deadline", "Deadline", "rule"),
     ("route_non_foi", "Route non-FOI", "rule"),
     ("retrieve_evidence", "Evidence", "retrieval"),
+    ("investigate", "Investigate", "judgement"),
+    ("run_searches", "Search tool", "retrieval"),
     ("assess", "Assess", "judgement"),
     ("decide_action", "Send or escalate", "rule"),
     ("draft_reply", "Draft reply", "judgement"),
@@ -226,6 +228,11 @@ def visited_nodes(values: dict) -> set[str]:
     ):
         if key in values:
             visited.add(node)
+    # investigate starts the search record on its first call; run_searches adds to it.
+    if "searches" in values:
+        visited.add("investigate")
+    if values.get("searches"):
+        visited.add("run_searches")
     if "assessment" in values and "action" in values:
         visited.add("decide_action")
     if "assessment" in values and "draft" in values:
@@ -264,6 +271,12 @@ def _node_summary(node: str, status: str, values: dict) -> str:
         return f"due {display_date(values['deadline'], year=False)}"
     if node == "retrieve_evidence":
         return _plural(len(values.get("evidence") or []), "record")
+    if node == "investigate":
+        n = len(values.get("searches") or [])
+        return f"{n} " + ("search" if n == 1 else "searches")
+    if node == "run_searches":
+        found = [d for d in values.get("evidence") or [] if d.get("found_by") == "search_tool"]
+        return f"{len(found)} new " + ("record" if len(found) == 1 else "records")
     if node == "assess":
         return (values.get("assessment") or {}).get("recommended_decision") or ""
     if node == "draft_reply":
@@ -674,7 +687,8 @@ class Cases:
             "case_id": row["case_id"],
             "run_id": row["run_id"],
             "ran_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            "state": self._state(row).values,
+            # The search tool's messages aren't JSON, and a replay doesn't need them.
+            "state": {k: v for k, v in self._state(row).values.items() if k != "investigation"},
         }
         path.write_text(json.dumps(record, indent=2), encoding="utf-8")
 

@@ -36,6 +36,9 @@ PUBLISHED_SOURCES = {"disclosure_log", "publication_scheme"}
 # A placeholder until it is calibrated against labelled examples on the classifier model in use.
 REGIME_MIN_PROB = 0.6
 
+# The most searches the search tool may make on one case, however many the model asks for.
+MAX_SEARCHES = 3
+
 
 def _regime_unclear(state: FOIState) -> bool:
     """True if the classifier's top regime is below REGIME_MIN_PROB.
@@ -150,3 +153,15 @@ def _is_s21(section: str) -> bool:
 def route_by_action(state: FOIState) -> Literal["human_review", "log_and_send"]:
     """Escalated cases go to an officer. Sent and routed cases go straight out."""
     return "human_review" if state.get("action") == "escalate" else "log_and_send"
+
+
+def searches_left(state: FOIState) -> int:
+    """How many more searches the search tool may make on this case."""
+    return max(MAX_SEARCHES - len(state.get("searches") or []), 0)
+
+
+def route_after_investigate(state: FOIState) -> Literal["run_searches", "assess"]:
+    """Run the searches the model asked for while the budget lasts. Otherwise assess."""
+    messages = state.get("investigation") or []
+    asked = bool(messages) and bool(getattr(messages[-1], "tool_calls", None))
+    return "run_searches" if asked and searches_left(state) else "assess"

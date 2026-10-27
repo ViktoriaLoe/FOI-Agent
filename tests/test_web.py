@@ -7,6 +7,7 @@ from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 
 from foi_agent import nodes
 from foi_agent.web import cases as cases_module
@@ -208,6 +209,35 @@ def test_an_assessed_case_did_not_go_through_route_non_foi():
     assert steps["decide_action"] == steps["draft_reply"] == steps["log_and_send"] == "done"
 
 
+def test_pipeline_shows_the_search_tool_when_it_searched():
+    values = {
+        "request": "x",
+        "regime": "FOI",
+        "regime_check": "FOI",
+        "evidence": [{"id": "PS-003"}, {"id": "PS-006", "found_by": "search_tool"}],
+        "searches": [{"source": "publication_scheme", "query": "q", "ids": ["PS-006"]}] * 2,
+        "assessment": SIGNPOST,
+    }
+    pipeline = pipeline_view(values, ("decide_action",), finished=False)
+    summaries = {step["node"]: (step["status"], step["summary"]) for step in pipeline}
+
+    assert summaries["investigate"] == ("done", "2 searches")
+    assert summaries["run_searches"] == ("done", "1 new record")
+    assert summaries["retrieve_evidence"] == ("done", "2 records")
+
+
+@pytest.mark.parametrize(
+    ("values", "investigate"),
+    [({"searches": []}, "done"), ({}, "skipped")],  # the model didn't search; the tool was off
+)
+def test_pipeline_skips_the_search_tool_when_it_made_no_searches(values, investigate):
+    values = {"request": "x", "regime": "FOI", "evidence": [], "assessment": SIGNPOST} | values
+    steps = statuses(pipeline_view(values, (), finished=True))
+
+    assert steps["investigate"] == investigate
+    assert steps["run_searches"] == "skipped"
+
+
 def test_sse_puts_each_line_of_data_on_its_own_field():
     assert sse("done", "<p>\n  hi\n</p>") == "event: done\ndata: <p>\ndata:   hi\ndata: </p>\n\n"
 
@@ -245,7 +275,7 @@ def test_review_feedback_failure_is_swallowed(monkeypatch):
 @pytest.fixture
 def web(monkeypatch, tmp_path):
     """A function that builds the app over fake model nodes returning the given outputs. The
-    regime check always agrees with the classifier.
+    regime check always agrees with the classifier, and the search tool makes no searches.
 
     The default graph is built on first use, after the fakes are in place, so these tests also
     exercise the SqliteSaver wiring.
@@ -264,6 +294,11 @@ def web(monkeypatch, tmp_path):
             nodes,
             "check_regime",
             lambda state: {"regime_check": regime, "regime_check_reason": "Fake check."},
+        )
+        monkeypatch.setattr(
+            nodes,
+            "investigate",
+            lambda state: {"investigation": [AIMessage("The evidence is enough.")], "searches": []},
         )
         monkeypatch.setattr(nodes, "assess", lambda state: {"assessment": fake_assessment})
         monkeypatch.setattr(nodes, "draft_reply", lambda state: {"draft": "Fake draft reply."})
@@ -438,6 +473,18 @@ def test_example_run_can_be_replayed(web, tmp_path):
     assert "sse-connect" not in response.text  # nothing runs again
     assert case_id[:8] in response.text
     assert "One calendar month" in response.text  # the SAR deadline rule
+
+
+def test_an_foi_example_run_is_saved_without_the_search_tool_messages(web, tmp_path):
+    client = web("FOI", EXEMPTION)
+    example = client.app.state.cases.example(1)
+    case_id, _ = run_case(client, example["request"], example["received"])
+
+    saved = json.loads((tmp_path / "demo_runs" / "1.json").read_text(encoding="utf-8"))
+    assert saved["case_id"] == case_id
+    assert "investigation" not in saved["state"]
+    assert saved["state"]["searches"] == []
+    assert client.get("/examples/1/replay").status_code == 200
 
 
 def test_a_case_still_finishes_when_the_browser_stops_listening(web):
