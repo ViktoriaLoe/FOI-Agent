@@ -8,12 +8,17 @@ from evals.evaluators import (
     exemption_precision,
     exemption_recall,
     no_unsafe_send,
+    no_wrong_auto_action,
     published_match,
+    regime_check_correct,
     regime_correct,
     retrieval_recall,
+    searches_made,
     sends_when_expected,
+    tool_found_relevant,
 )
-from evals.run_experiment import summarise
+from evals.judge import JUDGE_VERSION, draft_judge
+from evals.run_experiment import evaluator_versions, full_evaluators, summarise
 from evals.upload_dataset import load_examples
 
 
@@ -50,6 +55,30 @@ def test_sending_is_only_safe_when_the_label_says_send(got, expected, safe):
 
 def test_escalating_is_never_unsafe():
     assert score(no_unsafe_send, {"action": "escalate"}, {"action": "send"}) == 1
+
+
+@pytest.mark.parametrize(
+    ("got", "expected", "comment"),
+    [
+        ("route", "escalate", "Routed, but should escalate."),
+        ("send", "escalate", "Sent, but should escalate."),
+        ("route", "send", "Routed, but should send."),
+    ],
+)
+def test_any_wrong_automatic_action_fails(got, expected, comment):
+    result = no_wrong_auto_action({"action": got}, {"action": expected})
+    assert result["score"] == 0
+    assert result["comment"] == comment
+
+
+@pytest.mark.parametrize("label", ["route", "send"])
+def test_a_correct_automatic_action_passes(label):
+    assert score(no_wrong_auto_action, {"action": label}, {"action": label}) == 1
+
+
+@pytest.mark.parametrize("label", ["send", "route", "clarify"])
+def test_escalating_is_never_a_wrong_automatic_action(label):
+    assert score(no_wrong_auto_action, {"action": "escalate"}, {"action": label}) == 1
 
 
 def test_escalating_a_safe_signpost_counts_as_a_missed_send():
@@ -122,3 +151,71 @@ def test_summary_averages_only_scores_that_apply():
     summary = summarise(rows, "test")
     assert "| `no_unsafe_send` | 50% (n=2) |" in summary
     assert "| `action_correct` | 0% (n=1) |" in summary
+
+
+def test_rescoring_can_be_limited_to_named_evaluators_and_leaves_out_the_judge():
+    assert draft_judge not in full_evaluators(judge=False)
+    chosen = full_evaluators(judge=False, only=["no_wrong_auto_action", "sent_draft_complete"])
+    assert [e.__name__ for e in chosen] == ["sent_draft_complete", "no_wrong_auto_action"]
+    with pytest.raises(SystemExit):
+        full_evaluators(judge=False, only=["no_such_check"])
+
+
+def test_versions_are_recorded_only_for_evaluators_in_use():
+    assert evaluator_versions(full_evaluators(judge=True))["judge_version"] == JUDGE_VERSION
+    versions = evaluator_versions([regime_correct])
+    assert versions == {"checks_version": None, "judge_version": None}
+
+
+def test_regime_check_is_scored_against_the_label_and_skipped_without_one():
+    reference = {"regime": "FOI"}
+    assert score(regime_check_correct, {"regime": "SAR", "regime_check": "FOI"}, reference) == 1
+    assert score(regime_check_correct, {"regime": "FOI", "regime_check": "SAR"}, reference) == 0
+    assert score(regime_check_correct, {"regime": "FOI"}, reference) is None
+    assert score(regime_check_correct, {"regime_check": "FOI"}, {"action": "escalate"}) is None
+
+
+def tool_run(*evidence, searches=2):
+    searched = [
+        {"source": "publication_scheme", "query": f"q{i}", "ids": []} for i in range(searches)
+    ]
+    return {"evidence": list(evidence), "searches": searched}
+
+
+def test_searches_made_counts_tool_searches_and_skips_runs_without_the_tool():
+    assert score(searches_made, tool_run(searches=2), {}) == 2
+    assert score(searches_made, tool_run(searches=0), {}) == 0
+    assert score(searches_made, {"evidence": []}, {}) is None  # the tool was off
+    assert score(searches_made, {"regime": "SAR"}, {}) is None  # left before evidence
+
+
+def test_tool_found_relevant_counts_only_relevant_records_the_first_search_missed():
+    outputs = tool_run(
+        {"id": "PS-003"},  # found by the first search
+        {"id": "DL-2026-014", "found_by": "search_tool"},
+        {"id": "EX-S43", "found_by": "search_tool"},  # found by the tool, but not relevant
+    )
+    reference = {"relevant_ids": ["PS-003", "DL-2026-014", "EX-S40"]}
+    result = tool_found_relevant(outputs, reference)
+    assert result["score"] == 1
+    assert result["comment"] == "DL-2026-014"
+    assert score(tool_found_relevant, tool_run({"id": "PS-003"}), reference) == 0
+    assert score(tool_found_relevant, {"evidence": [{"id": "PS-003"}]}, reference) is None
+    assert score(tool_found_relevant, outputs, {"relevant_ids": []}) is None
+
+
+def test_summary_shows_counts_as_means_not_percentages():
+    def row(scores):
+        results = [SimpleNamespace(key=k, score=v) for k, v in scores.items()]
+        example = SimpleNamespace(metadata={"slice": "published", "category": "normal"})
+        return {"example": example, "evaluation_results": {"results": results}}
+
+    rows = [row({"searches_made": 3, "no_unsafe_send": 1}), row({"searches_made": 0})]
+    summary = summarise(rows, "test")
+    assert "| `searches_made` | 1.50 (n=2) |" in summary
+    assert "| `no_unsafe_send` | 100% (n=1) |" in summary
+
+
+def test_full_runs_include_the_trajectory_evaluators():
+    names = [e.__name__ for e in full_evaluators(judge=False)]
+    assert "searches_made" in names and "tool_found_relevant" in names

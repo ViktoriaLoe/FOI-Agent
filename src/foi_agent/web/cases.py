@@ -36,9 +36,12 @@ GOLDEN_FILE = "evals/datasets/golden.jsonl"
 # (node, label, kind) in graph order.
 PIPELINE = (
     ("classify_regime", "Classify regime", "judgement"),
-    ("route_non_foi", "Route non-FOI", "rule"),
+    ("check_regime", "Check regime", "judgement"),
     ("compute_deadline", "Deadline", "rule"),
+    ("route_non_foi", "Route non-FOI", "rule"),
     ("retrieve_evidence", "Evidence", "retrieval"),
+    ("investigate", "Investigate", "judgement"),
+    ("run_searches", "Search tool", "retrieval"),
     ("assess", "Assess", "judgement"),
     ("decide_action", "Send or escalate", "rule"),
     ("draft_reply", "Draft reply", "judgement"),
@@ -65,6 +68,18 @@ DECISION_LABELS = {
     "signpost": "Signpost to published information",
     "part_refuse": "Part refuse",
     "refuse": "Refuse",
+}
+_WORKING_DAYS_NOTE = (
+    "Twenty working days from the next working day, skipping weekends and UK bank holidays."
+)
+DEADLINE_NOTES = {
+    "FOI": _WORKING_DAYS_NOTE,
+    "EIR": _WORKING_DAYS_NOTE,
+    "SAR": (
+        "One calendar month: the same date next month, or its last day, moved to the next "
+        "working day if it falls on a weekend or UK bank holiday."
+    ),
+    "BAU": "Business as usual requests have no statutory deadline.",
 }
 REVIEW_ACTIONS = {"approve": "Approved", "edit": "Edited and sent", "reject": "Rejected"}
 SOURCE_LABELS = {
@@ -199,15 +214,25 @@ def visited_nodes(values: dict) -> set[str]:
     visited = set()
     if "regime" in values:
         visited.add("classify_regime")
-        if rules.route_by_regime(values) == "route_non_foi" and "action" in values:
-            visited.add("route_non_foi")
+    if "regime_check" in values:
+        visited.add("check_regime")
+    # compute_deadline sets no deadline for business as usual, but every later node follows it.
+    if "deadline" in values or "action" in values or "evidence" in values:
+        visited.add("compute_deadline")
+    # route_non_foi sets the action before any assessment; decide_action sets it after one.
+    if "action" in values and "assessment" not in values:
+        visited.add("route_non_foi")
     for key, node in (
-        ("deadline", "compute_deadline"),
         ("evidence", "retrieve_evidence"),
         ("assessment", "assess"),
     ):
         if key in values:
             visited.add(node)
+    # investigate starts the search record on its first call; run_searches adds to it.
+    if "searches" in values:
+        visited.add("investigate")
+    if values.get("searches"):
+        visited.add("run_searches")
     if "assessment" in values and "action" in values:
         visited.add("decide_action")
     if "assessment" in values and "draft" in values:
@@ -235,12 +260,23 @@ def _node_summary(node: str, status: str, values: dict) -> str:
         regime = values.get("regime")
         top = (values.get("regime_scores") or {}).get(regime)
         return f"{regime} {top:.2f}" if top is not None else str(regime)
+    if node == "check_regime":
+        check = values.get("regime_check")
+        return f"{check} · {'agrees' if check == values.get('regime') else 'disagrees'}"
     if node in ("route_non_foi", "decide_action"):
         return _action_summary(values)
     if node == "compute_deadline":
+        if not values.get("deadline"):
+            return "no deadline"
         return f"due {display_date(values['deadline'], year=False)}"
     if node == "retrieve_evidence":
         return _plural(len(values.get("evidence") or []), "record")
+    if node == "investigate":
+        n = len(values.get("searches") or [])
+        return f"{n} " + ("search" if n == 1 else "searches")
+    if node == "run_searches":
+        found = [d for d in values.get("evidence") or [] if d.get("found_by") == "search_tool"]
+        return f"{len(found)} new " + ("record" if len(found) == 1 else "records")
     if node == "assess":
         return (values.get("assessment") or {}).get("recommended_decision") or ""
     if node == "draft_reply":
@@ -395,6 +431,7 @@ def case_view(
         "threshold_pct": round(rules.REGIME_MIN_PROB * 100),
         "regime_unclear": rules._regime_unclear(values),
         "deadline_display": display_date(deadline),
+        "deadline_note": DEADLINE_NOTES.get(regime, "Worked out once the regime is classified."),
         "working_days_left": (
             working_days_left(date.fromisoformat(deadline), today) if deadline else None
         ),
@@ -650,7 +687,8 @@ class Cases:
             "case_id": row["case_id"],
             "run_id": row["run_id"],
             "ran_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            "state": self._state(row).values,
+            # The search tool's messages aren't JSON, and a replay doesn't need them.
+            "state": {k: v for k, v in self._state(row).values.items() if k != "investigation"},
         }
         path.write_text(json.dumps(record, indent=2), encoding="utf-8")
 
@@ -760,7 +798,8 @@ class Cases:
             if action != "reject":
                 agent_draft = (state.values.get("draft") or "").strip()
                 if not (draft or agent_draft):
-                    # Cases escalated by route_non_foi (EIR, regime unclear) come with no draft.
+                    # Cases escalated by route_non_foi (EIR, or blocked from acting on their
+                    # own) come with no draft.
                     raise ValueError("There is no reply to send. Write one, or reject the case.")
                 edited = bool(draft) and draft != agent_draft
                 action = "edit" if edited else "approve"

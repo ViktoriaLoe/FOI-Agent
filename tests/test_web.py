@@ -7,6 +7,7 @@ from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 
 from foi_agent import nodes
 from foi_agent.web import cases as cases_module
@@ -141,11 +142,11 @@ def statuses(pipeline):
 
 def test_pipeline_marks_the_next_node_running_and_the_rest_pending():
     values = {"request": "x", "regime": "FOI", "regime_scores": {"FOI": 0.9}}
-    steps = statuses(pipeline_view(values, ("compute_deadline",), finished=False))
+    steps = statuses(pipeline_view(values, ("check_regime",), finished=False))
 
     assert steps["classify_regime"] == "done"
-    assert steps["compute_deadline"] == "running"
-    assert steps["route_non_foi"] == steps["assess"] == steps["log_and_send"] == "pending"
+    assert steps["check_regime"] == "running"
+    assert steps["compute_deadline"] == steps["route_non_foi"] == steps["assess"] == "pending"
 
 
 def test_finished_pipeline_skips_unvisited_nodes_and_pauses_review():
@@ -153,19 +154,88 @@ def test_finished_pipeline_skips_unvisited_nodes_and_pauses_review():
         "request": "x",
         "regime": "EIR",
         "regime_scores": {"EIR": 0.8},
+        "regime_check": "EIR",
+        "deadline": "2026-11-23",
         "action": "escalate",
         "escalation_reasons": ["Environmental information: handle under the EIR."],
     }
     pipeline = pipeline_view(values, next_after_finish(values), finished=True)
     steps = statuses(pipeline)
 
-    assert steps["route_non_foi"] == "done"
-    assert steps["compute_deadline"] == steps["assess"] == steps["log_and_send"] == "skipped"
+    assert steps["check_regime"] == steps["compute_deadline"] == steps["route_non_foi"] == "done"
+    assert steps["retrieve_evidence"] == steps["assess"] == steps["log_and_send"] == "skipped"
     assert steps["human_review"] == "paused"
     summaries = {step["node"]: step["summary"] for step in pipeline}
     assert summaries["classify_regime"] == "EIR 0.80"
+    assert summaries["check_regime"] == "EIR · agrees"
+    assert summaries["compute_deadline"] == "due Mon 23 Nov"
     assert summaries["route_non_foi"] == "escalate · 1 reason"
     assert summaries["human_review"] == "awaiting officer"
+
+
+def test_pipeline_shows_a_disagreeing_check_and_a_case_with_no_deadline():
+    values = {
+        "request": "x",
+        "regime": "BAU",
+        "regime_scores": {"BAU": 0.9},
+        "regime_check": "FOI",
+        "action": "escalate",
+        "escalation_reasons": ["Regime check disagrees: classifier BAU, check FOI."],
+    }
+    pipeline = pipeline_view(values, next_after_finish(values), finished=True)
+    summaries = {step["node"]: (step["status"], step["summary"]) for step in pipeline}
+
+    assert summaries["check_regime"] == ("done", "FOI · disagrees")
+    assert summaries["compute_deadline"] == ("done", "no deadline")
+    assert summaries["route_non_foi"] == ("done", "escalate · 1 reason")
+    assert summaries["decide_action"][0] == "skipped"
+
+
+def test_an_assessed_case_did_not_go_through_route_non_foi():
+    values = {
+        "request": "x",
+        "regime": "FOI",
+        "regime_check": "FOI",
+        "deadline": "2026-11-23",
+        "evidence": [],
+        "assessment": SIGNPOST,
+        "action": "send",
+        "draft": "Fake draft reply.",
+        "outcome": "sent",
+    }
+    steps = statuses(pipeline_view(values, (), finished=True))
+
+    assert steps["route_non_foi"] == steps["human_review"] == "skipped"
+    assert steps["decide_action"] == steps["draft_reply"] == steps["log_and_send"] == "done"
+
+
+def test_pipeline_shows_the_search_tool_when_it_searched():
+    values = {
+        "request": "x",
+        "regime": "FOI",
+        "regime_check": "FOI",
+        "evidence": [{"id": "PS-003"}, {"id": "PS-006", "found_by": "search_tool"}],
+        "searches": [{"source": "publication_scheme", "query": "q", "ids": ["PS-006"]}] * 2,
+        "assessment": SIGNPOST,
+    }
+    pipeline = pipeline_view(values, ("decide_action",), finished=False)
+    summaries = {step["node"]: (step["status"], step["summary"]) for step in pipeline}
+
+    assert summaries["investigate"] == ("done", "2 searches")
+    assert summaries["run_searches"] == ("done", "1 new record")
+    assert summaries["retrieve_evidence"] == ("done", "2 records")
+
+
+@pytest.mark.parametrize(
+    ("values", "investigate"),
+    [({"searches": []}, "done"), ({}, "skipped")],  # the model didn't search; the tool was off
+)
+def test_pipeline_skips_the_search_tool_when_it_made_no_searches(values, investigate):
+    values = {"request": "x", "regime": "FOI", "evidence": [], "assessment": SIGNPOST} | values
+    steps = statuses(pipeline_view(values, (), finished=True))
+
+    assert steps["investigate"] == investigate
+    assert steps["run_searches"] == "skipped"
 
 
 def test_sse_puts_each_line_of_data_on_its_own_field():
@@ -204,7 +274,8 @@ def test_review_feedback_failure_is_swallowed(monkeypatch):
 
 @pytest.fixture
 def web(monkeypatch, tmp_path):
-    """A function that builds the app over fake LLM nodes returning the given outputs.
+    """A function that builds the app over fake model nodes returning the given outputs. The
+    regime check always agrees with the classifier, and the search tool makes no searches.
 
     The default graph is built on first use, after the fakes are in place, so these tests also
     exercise the SqliteSaver wiring.
@@ -219,6 +290,16 @@ def web(monkeypatch, tmp_path):
             return {"regime": regime, "regime_scores": {regime: 0.9}}
 
         monkeypatch.setattr(nodes, "classify_regime", classify)
+        monkeypatch.setattr(
+            nodes,
+            "check_regime",
+            lambda state: {"regime_check": regime, "regime_check_reason": "Fake check."},
+        )
+        monkeypatch.setattr(
+            nodes,
+            "investigate",
+            lambda state: {"investigation": [AIMessage("The evidence is enough.")], "searches": []},
+        )
         monkeypatch.setattr(nodes, "assess", lambda state: {"assessment": fake_assessment})
         monkeypatch.setattr(nodes, "draft_reply", lambda state: {"draft": "Fake draft reply."})
         app = create_app(data_dir=tmp_path)
@@ -282,9 +363,11 @@ def test_sar_is_routed_and_skips_the_foi_nodes(web):
     event, last = final[-1]
     assert event == "done" and last["case"]["status"] == "routed"
     steps = statuses(final[-2][1]["pipeline"])
-    assert steps["route_non_foi"] == steps["log_and_send"] == "done"
-    for node in ("compute_deadline", "retrieve_evidence", "assess", "draft_reply", "human_review"):
+    for node in ("check_regime", "compute_deadline", "route_non_foi", "log_and_send"):
+        assert steps[node] == "done"
+    for node in ("retrieve_evidence", "assess", "draft_reply", "human_review"):
         assert steps[node] == "skipped"
+    assert last["case"]["deadline_display"] == "Thu 26 Nov 2026"  # one calendar month
 
 
 def escalate(web):
@@ -389,6 +472,19 @@ def test_example_run_can_be_replayed(web, tmp_path):
     assert response.status_code == 200
     assert "sse-connect" not in response.text  # nothing runs again
     assert case_id[:8] in response.text
+    assert "One calendar month" in response.text  # the SAR deadline rule
+
+
+def test_an_foi_example_run_is_saved_without_the_search_tool_messages(web, tmp_path):
+    client = web("FOI", EXEMPTION)
+    example = client.app.state.cases.example(1)
+    case_id, _ = run_case(client, example["request"], example["received"])
+
+    saved = json.loads((tmp_path / "demo_runs" / "1.json").read_text(encoding="utf-8"))
+    assert saved["case_id"] == case_id
+    assert "investigation" not in saved["state"]
+    assert saved["state"]["searches"] == []
+    assert client.get("/examples/1/replay").status_code == 200
 
 
 def test_a_case_still_finishes_when_the_browser_stops_listening(web):

@@ -3,9 +3,8 @@
 {% call section('Deadline', kind='rule', node='compute_deadline') %}
   {% if case.deadline_display %}
   <p class="lead">{{ case.deadline_display }}<span class="lead__aside">{{ days_left(case.working_days_left) }}</span></p>
-  <p class="note">Received {{ case.received_display }}. Twenty working days from the next working day, skipping weekends and UK bank holidays.</p>
   {% else %}
   <p class="lead lead--quiet">Not set</p>
-  <p class="note">Received {{ case.received_display }}. The FOI deadline is only worked out once the classifier is clear the request is FOI.</p>
   {% endif %}
+  <p class="note">Received {{ case.received_display }}. {{ case.deadline_note }}</p>
 {% endcall %}

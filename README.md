@@ -1,123 +1,75 @@
 # FOI Agent
 
-An agent that triages Freedom of Information (FOI) requests for a UK council.
+An agent that triages Freedom of Information (FOI) requests for a UK council. It works out which regime a request falls under, sets the deadline, checks what is already published and which exemptions might apply, and drafts a reply. It replies on its own only to signpost published information or to route a subject access request or service request. Everything else goes to an FOI officer with a suggested decision and draft.
 
-It works out what kind of request has come in, routes anything that isn't FOI to the right place, and uses ICO guidance and the council's past published responses to set the deadline and flag likely exemptions. It only replies on its own in low-risk cases, such as pointing the requester to information that's already published. Everything else goes to an FOI officer with a suggested decision and a draft reply.
+**Start with [HANDOVER.md](HANDOVER.md)** for the results, what the evals taught me, known failures and how I'd evaluate it in production. This README covers setup and reference.
 
 ## Stack
 
-- Python
-- LangGraph (LangGraph Studio for development)
-- OpenAI `gpt-6-luna` for assessment and drafting (set `FOI_MODEL` to use another model)
-- A decision model for regime classification, `semif-qwen3.5-4b` through `langchain-typesafe` and the LangSmith Gateway (set `FOI_CLASSIFIER_MODEL` to use another model)
+- Python and LangGraph
+- OpenAI `gpt-6-luna` for the regime check, assessment and drafting (`FOI_MODEL`)
+- A decision model for regime classification, `semif-qwen3.5-4b` through `langchain-typesafe` and the LangSmith Gateway (`FOI_CLASSIFIER_MODEL`)
 - BM25 retrieval (`rank-bm25`) over a small knowledge base
-- LangSmith for tracing and evaluation
+- LangSmith for tracing and evaluation, with an LLM judge on `gpt-5.5-2026-04-23` (`FOI_JUDGE_MODEL`)
+- FastAPI, Jinja2 and HTMX for the demo UI
 
 ## Quickstart
 
 Requires Python 3.11 or later.
 
-macOS / Linux:
-
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
-cp .env.example .env
+cp .env.example .env               # Windows: Copy-Item .env.example .env
 ```
 
-Windows (PowerShell):
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-Copy-Item .env.example .env
-```
-
-Then add your API keys to `.env`: `OPENAI_API_KEY` for OpenAI, and `LANGSMITH_API_KEY`, which the regime classifier needs as well as tracing.
-
-Check the setup:
+Add `OPENAI_API_KEY` and `LANGSMITH_API_KEY` to `.env`. The LangSmith key is used for tracing and by the regime classifier.
 
 ```bash
 python -m pytest
 python -m ruff check .
 ```
 
-The tests use fake models, so they make no API calls.
+The tests use fake models and make no API calls.
 
 ## Run it
-
-One request from the command line. Escalated cases pause for officer review; add `--review approve` or `--review reject` to decide them:
 
 ```bash
 python -m foi_agent "How much is the chief executive paid?" --received 2026-10-26
 python -m foi_agent --file examples/requests.jsonl --line 5
 ```
 
-[examples/requests.jsonl](examples/requests.jsonl) holds sample requests, each with a note on the path it exercises.
-
-In LangGraph Studio:
-
-```bash
-langgraph dev
-```
-
-On Windows machines where the venv's `.exe` launchers are blocked, run `python -c "from langgraph_cli.cli import cli; cli()" dev` instead.
-
-Replies are written to `var/outbox/` and each case is appended to `var/case_log.jsonl`. Nothing is emailed. Set `FOI_OUTPUT_DIR` to write somewhere else.
+Escalated cases pause for officer review. Add `--review approve` or `--review reject` to decide them. [examples/requests.jsonl](examples/requests.jsonl) holds sample requests. Replies go to `var/outbox/` and each case is appended to `var/case_log.jsonl`. Nothing is emailed.
 
 ### Demo UI
 
-A small web app over the same graph, built with FastAPI, Jinja2 and HTMX. It has two pages: **Triage**, to run a request and watch it go through the graph, and **Review**, the FOI officer's queue of escalated cases.
+```bash
+pip install -e ".[demo]"
+python -m uvicorn foi_agent.web.app:app --reload
+```
 
-1. Install the demo extra, in the same virtual environment as the Quickstart:
+Open http://127.0.0.1:8000. **Triage** runs a request and streams its path through the graph, then shows the regime probabilities, the deadline, why it was sent, routed or escalated, the assessment, the draft and the checks. For a golden-set request it also shows the run against its label. **Review** is the officer's queue: send, edit or reject, and the decision is logged to LangSmith as feedback (`officer_review`, `draft_edited`).
 
-   ```bash
-   pip install -e ".[demo]"
-   ```
+Each triage is a full run with real model calls. **Show last run** replays a saved run without calling a model. Cases are kept in `var/web.sqlite`. The app has no login, so keep it on 127.0.0.1.
 
-2. Check `.env` has `OPENAI_API_KEY` and `LANGSMITH_API_KEY`, as for the command line. The server reads `.env` when it starts.
-
-3. Start the server from the repo root:
-
-   ```bash
-   python -m uvicorn foi_agent.web.app:app --reload
-   ```
-
-   On Windows with the venv activated, the same command works in PowerShell. Where the venv's `.exe` launchers are blocked, call its Python directly: `.venv\Scripts\python -m uvicorn foi_agent.web.app:app --reload`.
-
-4. Open http://127.0.0.1:8000. Add `--port 8001` to the command if 8000 is taken.
-
-On **Triage**, type a request, or open **Sample requests** and pick one, then choose **Triage**. The path through the graph streams in node by node over server-sent events. The result shows:
-
-- the regime probabilities against the threshold, and the deadline;
-- why the case was sent, routed or escalated;
-- the assessment, the evidence and the draft reply;
-- the [checks](#checks);
-- for a request in the golden dataset, the run set against its label field by field;
-- with tracing on, a link to the run's LangSmith trace.
-
-On **Review**, the queue holds cases paused at `human_review`, soonest deadline first. The officer sends the reply, editing it first if it needs changing, or rejects it, and the graph resumes. A reply sent with changes is recorded as an edit. With tracing on, the decision is attached to the triage run in LangSmith as feedback: `officer_review`, plus `draft_edited` when the officer changed the reply.
-
-Things to know:
-
-- **Cost.** Each triage is a full run, with the same model calls as the command line. A run finishes even if you leave the page.
-- **Replays.** The last run of each sample request is saved to `var/demo_runs/`. **Show last run** replays it without calling a model, which is useful for a demo or recording.
-- **Storage.** Cases and checkpoints are kept in `var/web.sqlite`, so the review queue survives a restart. Stop the server and delete `var/web.sqlite` and `var/demo_runs/` to start afresh.
-- **Local only.** The app has no login, so keep it on 127.0.0.1.
+On Windows machines where the venv's `.exe` launchers are blocked, run commands through Python, for example `.venv\Scripts\python -m uvicorn foi_agent.web.app:app --reload`.
 
 ## How it works
 
 ```mermaid
 flowchart TD
     A[Request received] --> C[classify_regime]
-    C -->|SAR / business as usual / EIR / unclear| D[route_non_foi]
-    D -->|SAR / business as usual| K
-    D -->|EIR / unclear| J
-    C -->|clear FOI| E[compute_deadline]
-    E --> F[retrieve_evidence]
-    F --> G[assess]
+    C --> R[check_regime]
+    R --> E[compute_deadline]
+    E -->|FOI, nothing blocking| F[retrieve_evidence]
+    E -->|anything else| D[route_non_foi]
+    D -->|SAR / business as usual, nothing blocking| K
+    D -->|EIR, or anything blocking| J
+    F --> V[investigate]
+    V -->|search| S[run_searches]
+    S --> V
+    V -->|enough evidence, or 3 searches made| G[assess]
     G --> H[decide_action]
     H --> I[draft_reply]
     I -->|low risk| K[log_and_send]
@@ -129,102 +81,63 @@ flowchart TD
 
 | Node | Type | What it does |
 | --- | --- | --- |
-| `classify_regime` | Judgement (decision model) | FOI, EIR, SAR or business as usual, with a probability for each. It is given the ICO guidance summary for every regime, every time |
-| `route_non_foi` | Deterministic | SAR and business as usual get a template acknowledgement naming the team it has gone to; EIR escalates. If the top regime's probability is below `REGIME_MIN_PROB` (0.6, uncalibrated), the regime is unclear and the case escalates, FOI included |
-| `compute_deadline` | Deterministic | 20 working days, with day one the first working day after receipt. Skips weekends and bank holidays in any part of the UK (FOIA s10(6)) |
-| `retrieve_evidence` | Retrieval | Searches the disclosure log, publication scheme and exemption guidance using the request text |
-| `assess` | Judgement (LLM) | Already published (and where), possible exemptions, recommended decision, evidence relied on |
-| `decide_action` | Deterministic | Sends only a signpost to a retrieved publication scheme record or fully released disclosure log entry, with no exemption other than s21. Everything else escalates, with the reasons |
-| `draft_reply` | Judgement (LLM) | Plain-English reply grounded in the assessment and evidence |
-| `human_review` | Interrupt | Officer approves, edits or rejects escalated cases |
-| `log_and_send` | Deterministic | Writes the reply to the outbox and appends to the case log |
+| `classify_regime` | Decision model | FOI, EIR, SAR or business as usual, with a probability for each. Sees the guidance for every regime |
+| `check_regime` | LLM | An independent second view of the regime, without seeing the classifier's answer |
+| `compute_deadline` | Code | 20 working days for FOI and EIR, excluding bank holidays in any part of the UK (FOIA s10(6)). One calendar month for a SAR. None for business as usual |
+| `route_non_foi` | Code | Routes a SAR or business-as-usual case with a template acknowledgement if nothing blocks it. EIR, and anything blocked, escalates |
+| `retrieve_evidence` | Retrieval | BM25 over the disclosure log, publication scheme and exemption guidance |
+| `investigate`, `run_searches` | Tool use | Up to 3 more read-only searches before assessment. Turn off with `FOI_SEARCH_TOOL=0` |
+| `assess` | LLM | Whether it's already published, possible exemptions, the recommended decision and the evidence relied on |
+| `decide_action` | Code | Sends only a signpost to a retrieved published record, with no exemption beyond s21 and nothing blocking. Everything else escalates with reasons |
+| `draft_reply` | LLM | The reply. Information an officer must supply is marked `[OFFICER: …]` |
+| `human_review` | Interrupt | The officer approves, edits or rejects |
+| `log_and_send` | Code | Writes the reply to the outbox and the case log |
 
-## Observability
-
-Every run is traced to LangSmith when `LANGSMITH_TRACING=true`. A trace shows each node, every model call with its prompt and structured output, and each BM25 search as a retriever span listing the records it returned with their scores.
-
-Every run carries metadata, so traces and experiments can be filtered and compared:
-
-| Key | Value |
-| --- | --- |
-| `model` | The LLM in use for assessment and drafting (`FOI_MODEL`) |
-| `classifier_model` | The regime classifier's decision model (`FOI_CLASSIFIER_MODEL`) |
-| `prompt_version` | `PROMPT_VERSION` in [prompts.py](src/foi_agent/prompts.py), bumped whenever a prompt or the classifier's question changes |
-| `retriever`, `retrieval_k` | The retrieval method and the number of records taken from each source |
-| `corpus_version` | A hash of the knowledge base files, which changes whenever the data does |
-| `thread_id` | The case id, added by LangGraph |
-
-Runs from the command line are also tagged `cli`. Runs from the sample file record the line they came from as `example`.
-
-Traces store the request text in full, and real requests can contain personal data. That's acceptable for a prototype with invented requests, but a live deployment would need to mask inputs before they leave the council.
-
-## Checks
-
-[checks.py](src/foi_agent/checks.py) holds code checks that score a finished run without needing labels. Each one takes the run's final state as `outputs`, so it can be used as a LangSmith evaluator or applied to traced runs. A check that doesn't apply to a run, such as draft checks on a routed SAR, scores `None`.
-
-| Check | Step | Fails when |
-| --- | --- | --- |
-| `evidence_found` | Retrieve evidence | An FOI case found no published record or past response |
-| `citations_grounded` | Assess | The assessment cites an id that wasn't retrieved |
-| `assessment_consistent` | Assess | The decision contradicts its own fields, for example a signpost that isn't marked as published |
-| `exemption_sections_known` | Assess | An exemption isn't a real FOIA section |
-| `draft_links_grounded` | Draft reply | The reply links to a URL that isn't in the evidence and isn't the council's or the ICO's |
-| `draft_states_rights` | Draft reply | The reply doesn't mention internal review and the ICO |
-| `draft_no_new_personal_data` | Draft reply | The reply contains an email address, phone number, National Insurance number or postcode that wasn't in the request, other than the council's or the ICO's |
-
-To score traced runs and attach the results to them in LangSmith as feedback:
-
-```bash
-python evals/score_traces.py --dry-run   # print scores only
-python evals/score_traces.py             # write them to LangSmith
-```
-
-The script reads existing traces and makes no model calls. Running it again replaces earlier scores rather than adding to them. Each score records a `checks_version`, a hash of `checks.py`, so scores from changed checks can be told apart. The default project is `foi-agent-local`, where LangSmith files traces sent with the agent settings in `.env`. Use `--project` to score another project.
+An automatic send or route is blocked, and the case escalates, if the classifier's top regime is below 0.6, the regime check disagrees, or the request may not be in English.
 
 ## Evaluation
 
-[evals/datasets/golden.jsonl](evals/datasets/golden.jsonl) holds 63 labelled requests covering normal cases, edge cases and high-risk failures. [evals/datasets/README.md](evals/datasets/README.md) explains the labels, what each slice tests, the known gaps and how the before and after are kept honest. `python -m pytest tests/test_golden_dataset.py` checks the labels for format errors and unknown ids.
-
-Upload the dataset to LangSmith as `foi-golden`. Running it again updates the examples instead of duplicating them:
+The golden set is [evals/datasets/golden.jsonl](evals/datasets/golden.jsonl): 63 labelled requests, 42 dev and 21 test. [evals/datasets/README.md](evals/datasets/README.md) explains the labels and slices.
 
 ```bash
-python -m evals.upload_dataset
+python -m evals.upload_dataset                                  # push the dataset to LangSmith as foi-golden
+python -m evals.run_experiment --split dev --limit 5            # a cheap first run
+python -m evals.run_experiment --split dev                      # the dev split
+python -m evals.run_experiment --split dev --no-search-tool     # without the search tool
+python -m evals.run_experiment --split dev --classify-only      # the classifier only, no OpenAI calls
+python -m evals.run_experiment --rescore EXPERIMENT --only no_wrong_auto_action   # new evaluators on an old run
 ```
 
-Run an experiment:
+Each case makes one OpenAI call for the regime check. An FOI case that reaches assessment makes 3 to 5 more, and the judge one per draft (`--no-judge` skips it). Summaries are saved to `evals/results/`.
 
-```bash
-python -m evals.run_experiment --split dev --limit 5      # a cheap first run
-python -m evals.run_experiment --split dev --classify-only # regime classification only, no OpenAI calls
-python -m evals.run_experiment --split dev --repetitions 2 # the full dev split, each example twice
-```
-
-Each FOI case makes two OpenAI calls, plus one for the judge (skip it with `--no-judge`). Use `--slice` to run one slice and `--pause` to space out requests. Every experiment records the git commit and the agent's run metadata, and its summary by category and slice is saved to `evals/results/`.
-
-Each run is scored by three kinds of evaluator:
-
-| Kind | Where | What it scores |
+| Evaluators | Where | What they score |
 | --- | --- | --- |
-| Code checks, no labels needed | [checks.py](src/foi_agent/checks.py) | Grounded citations, consistent assessments, links, personal data, the requester's rights (see [Checks](#checks)) |
-| Code compared with the labels | [evaluators.py](evals/evaluators.py) | `regime_correct`, `action_correct`, `no_unsafe_send`, `sends_when_expected`, `decision_correct`, `published_match`, `exemption_recall` and `exemption_precision`, `deadline_correct`, `retrieval_recall` |
-| LLM judge | [judge.py](evals/judge.py) | Whether the draft is right for the case, grounded in the evidence and clear. The model is set by `FOI_JUDGE_MODEL`, and defaults to the agent's model |
+| 8 label-free checks | [checks.py](src/foi_agent/checks.py) | Citations retrieved, assessment consistent, real FOIA sections, links from the evidence, no added personal data, rights stated, no placeholders in sent replies |
+| 12 label checks | [evaluators.py](evals/evaluators.py) | Regime, regime check, action, `no_wrong_auto_action` (headline), `no_unsafe_send`, `sends_when_expected`, decision, published record, exemption recall and precision, deadline, retrieval recall |
+| 2 trajectory checks | [evaluators.py](evals/evaluators.py) | `searches_made`, `tool_found_relevant` |
+| LLM judge | [judge.py](evals/judge.py) | Whether the draft is right for the case, judged by its purpose (sent or escalated). Scored as `draft_judge_j2` |
 
-`no_unsafe_send` is the headline: the agent must never send a reply an officer should have seen. `sends_when_expected` measures the cost of caution, because escalating a safe signpost wastes an officer's time.
+The label-free checks also run on live traces, attaching scores as LangSmith feedback:
+
+```bash
+python evals/score_traces.py --dry-run   # print only
+python evals/score_traces.py             # write to LangSmith
+```
+
+## Observability
+
+Every run is traced to LangSmith. Each BM25 search is a retriever span showing the records it returned. Every trace carries `agent_version`, `model`, `classifier_model`, `prompt_version`, `retriever`, `retrieval_k`, `search_tool`, `max_searches` and `corpus_version` (a hash of the knowledge base). Experiments also record the judge and checks versions, and LangSmith adds the git commit. Traces store the request text in full, so a live deployment would need to mask personal data first.
 
 ## Knowledge base
 
-The council is fictional: Northbrook Borough Council. The knowledge base lives in [src/foi_agent/data/](src/foi_agent/data/):
+The council, Northbrook Borough Council, is fictional. The data lives in [src/foi_agent/data/](src/foi_agent/data/):
 
 | File | Contents |
 | --- | --- |
-| `regime_guidance.json` | Summaries of ICO guidance on FOI, EIR, subject access, business as usual and mixed requests, all given to the classifier |
-| `exemption_guidance.json` | Summaries of ICO guidance on s12, s14, s21, s22, s31, s40, s41, s42 and s43 |
-| `disclosure_log.json` | Past FOI and EIR responses the council has published |
-| `publication_scheme.json` | Datasets the council publishes routinely, mostly under the Local Government Transparency Code |
-| `bank_holidays.json` | UK bank holidays for England and Wales, Scotland and Northern Ireland, 2019 to 2028, from [gov.uk](https://www.gov.uk/bank-holidays.json), used by the deadline |
+| `regime_guidance.json` | ICO guidance summaries on FOI, EIR, subject access, business as usual and mixed requests |
+| `exemption_guidance.json` | ICO guidance summaries on s12, s14, s21, s22, s31, s40, s41, s42 and s43 |
+| `disclosure_log.json` | Past FOI and EIR responses (invented) |
+| `publication_scheme.json` | Datasets the council publishes (invented) |
+| `bank_holidays.json` | UK bank holidays for all three regions, 2019 to 2028, from [gov.uk](https://www.gov.uk/bank-holidays.json) |
 
-The ICO summaries contain public sector information licensed under the Open Government Licence v3.0. The disclosure log and publication scheme are invented.
-
-## Why the agent is cautious
-
-The costly mistakes are the ones that can't be undone once a reply is sent. A Subject Access Request answered as FOI effectively publishes someone's personal data, and a wrong refusal or disclosure can lead to an ICO complaint. So the agent classifies the regime first, escalates when no regime is clearly ahead, keeps the send/escalate decision as a plain rule rather than an LLM call, and defaults to escalating.
+The ICO summaries contain public sector information licensed under the Open Government Licence v3.0.

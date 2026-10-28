@@ -1,4 +1,5 @@
-"""Graph nodes: retrieval, the judgement nodes, the deadline, officer review and sending.
+"""Graph nodes: the judgement nodes, the deadline, retrieval and the search tool, officer review
+and sending.
 
 The deterministic routing and escalation rule live in `foi_agent.rules`.
 """
@@ -12,22 +13,33 @@ from pathlib import Path
 from typing import Literal
 
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool
 from langchain_typesafe import Choice, TypeSafeClassifier
 from langgraph.graph import END
 from langgraph.types import Command, interrupt
 
-from foi_agent.deadline import foi_deadline
-from foi_agent.prompts import ASSESS_SYSTEM, DRAFT_SYSTEM, REGIME_CRITERIA, REGIME_INSTRUCTIONS
+from foi_agent.deadline import foi_deadline, sar_deadline
+from foi_agent.prompts import (
+    ASSESS_SYSTEM,
+    CHECK_REGIME_SYSTEM,
+    DRAFT_SYSTEM,
+    INVESTIGATE_SYSTEM,
+    REGIME_CRITERIA,
+    REGIME_INSTRUCTIONS,
+)
 from foi_agent.retrieval import load_records, search
-from foi_agent.state import Assessment, FOIState
+from foi_agent.rules import MAX_SEARCHES, searches_left
+from foi_agent.state import Assessment, FOIState, RegimeCheck
 
 DEFAULT_MODEL = "openai:gpt-6-luna"
 DEFAULT_CLASSIFIER_MODEL = "semif-qwen3.5-4b"
 GATEWAY_URL = "https://gateway.smith.langchain.com"
 EVIDENCE_SOURCES = ("disclosure_log", "publication_scheme", "exemption_guidance")
 RETRIEVAL_K = 3  # records per source
+# The deadline rule for each regime the classifier can give. Business as usual has no deadline.
+DEADLINE_RULES = {"FOI": foi_deadline, "EIR": foi_deadline, "SAR": sar_deadline}
 
 
 def model_name() -> str:
@@ -62,7 +74,7 @@ def format_docs(docs: list[dict]) -> str:
     for doc in docs:
         lines = [f"[{doc['id']}] {doc.get('title', '')}".rstrip()]
         for key, value in doc.items():
-            if key in {"id", "title", "source", "score"}:
+            if key in {"id", "title", "source", "score", "found_by"}:
                 continue
             if isinstance(value, list):
                 value = "; ".join(map(str, value)) or "none"
@@ -101,9 +113,30 @@ def classify_regime(state: FOIState) -> dict:
     return {"regime": answer.choice, "regime_scores": dict(answer.probabilities)}
 
 
+def check_regime(state: FOIState) -> dict:
+    """A second, independent view of the regime from the main LLM.
+
+    The classifier is confidently wrong too often for its probabilities to guard an automatic
+    reply, so the rules act on their own only when this check agrees. It is not shown the
+    classifier's answer.
+    """
+    prompt = f"Request:\n{state['request']}\n\nICO guidance:\n\n{regime_guidance()}"
+    model = _model().with_structured_output(RegimeCheck)
+    check = model.invoke([SystemMessage(CHECK_REGIME_SYSTEM), HumanMessage(prompt)])
+    return {"regime_check": check.regime, "regime_check_reason": check.reasoning}
+
+
 def compute_deadline(state: FOIState) -> dict:
+    """The response deadline under the classifier's regime, before any routing.
+
+    Every case gets one, escalated ones included, except business as usual, which has none.
+    """
     received = date.fromisoformat(state["received"]) if state.get("received") else date.today()
-    return {"received": received.isoformat(), "deadline": foi_deadline(received).isoformat()}
+    update = {"received": received.isoformat()}
+    rule = DEADLINE_RULES.get(state.get("regime"))
+    if rule:
+        update["deadline"] = rule(received).isoformat()
+    return update
 
 
 def retrieve_evidence(state: FOIState) -> dict:
@@ -114,6 +147,81 @@ def retrieve_evidence(state: FOIState) -> dict:
         for doc in search(source, state["request"], k=RETRIEVAL_K)
     ]
     return {"evidence": evidence}
+
+
+@tool(response_format="content_and_artifact", parse_docstring=True)
+def search_records(
+    source: Literal["disclosure_log", "publication_scheme", "exemption_guidance"], query: str
+) -> tuple[str, list[dict]]:
+    """Search one source of the council's records and return the best matches. Read-only.
+
+    disclosure_log holds past FOI responses with their outcomes. publication_scheme holds the
+    datasets the council publishes routinely, with the periods they cover. exemption_guidance
+    holds ICO guidance on the FOI exemptions.
+
+    Args:
+        source: The source to search.
+        query: Words to search for, ideally as the council's own records would put them.
+    """
+    hits = search(source, query, k=RETRIEVAL_K)
+    return format_docs(hits), hits
+
+
+def investigate(state: FOIState) -> dict:
+    """Let the model look at the first search's evidence and ask for more searches if needed.
+
+    Makes no model call once the search budget is used up.
+    """
+    if not searches_left(state):
+        return {}
+    history = state.get("investigation") or []
+    # The first call starts the conversation, and its search record, which later calls continue.
+    start = []
+    if not history:
+        prompt = (
+            f"Received: {state.get('received')}\n\n"
+            f"Request:\n{state['request']}\n\n"
+            f"Evidence from the first search:\n\n{format_docs(state.get('evidence') or [])}"
+        )
+        start = [HumanMessage(prompt)]
+    model = _model().bind_tools([search_records])
+    response = model.invoke([SystemMessage(INVESTIGATE_SYSTEM), *history, *start])
+    update = {"investigation": [*start, response]}
+    if start:
+        update["searches"] = []
+    return update
+
+
+def run_searches(state: FOIState) -> dict:
+    """Run the searches the last message asked for, up to the budget, and refuse the rest.
+
+    New hits are added to the evidence once each, tagged as found by the search tool.
+    """
+    evidence = list(state.get("evidence") or [])
+    searches = list(state.get("searches") or [])
+    seen = {doc["id"] for doc in evidence}
+    replies = []
+    for call in state["investigation"][-1].tool_calls:
+        if len(searches) >= MAX_SEARCHES:
+            refusal = "Search limit reached: no more searches can be made on this case."
+            replies.append(ToolMessage(refusal, tool_call_id=call["id"], name=call["name"]))
+            continue
+        try:
+            reply = search_records.invoke(call)  # a ToolMessage carrying the hits as its artifact
+            hits = reply.artifact
+        except ValueError as exc:  # arguments that don't fit the schema, such as an unknown source
+            reply = ToolMessage(f"Search failed: {exc}", tool_call_id=call["id"], status="error")
+            hits = []
+        args = call.get("args") or {}
+        ids = [hit["id"] for hit in hits]
+        searches.append({"source": args.get("source"), "query": args.get("query"), "ids": ids})
+        for hit in hits:
+            if hit["id"] not in seen:
+                seen.add(hit["id"])
+                evidence.append({**hit, "found_by": "search_tool"})
+        reply.content = f"{reply.content}\n\nSearches left: {MAX_SEARCHES - len(searches)}."
+        replies.append(reply)
+    return {"evidence": evidence, "searches": searches, "investigation": replies}
 
 
 def assess(state: FOIState) -> dict:
