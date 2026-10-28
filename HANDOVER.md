@@ -7,24 +7,66 @@
 - Acts on its own only to signpost published information, or to route a SAR or service request. Everything else goes to an FOI officer.
 - **The model proposes, code decides.** Classification, assessment and drafting are model calls. Routing, the deadline and sending are tested code, because a sent reply can't be recalled.
 
+## v1 and v2
+
+The v2 graph. Thick borders mark what v2 added.
+
+```mermaid
+flowchart TD
+    A[Request] --> C[classify_regime]
+    C --> R[check_regime]
+    R --> E[compute_deadline]
+    E -->|FOI, nothing blocking| F[retrieve_evidence]
+    E -->|otherwise| D[route_non_foi]
+    D -->|SAR / business as usual, nothing blocking| K[log_and_send]
+    D -->|EIR, or blocked| J[human_review]
+    F --> V[investigate]
+    V <-->|up to 3| S[run_searches]
+    V --> G[assess]
+    G --> H[decide_action]
+    H --> I[draft_reply]
+    I -->|safe signpost| K
+    I -->|escalate| J
+    J -->|approve / edit| K
+    classDef new stroke-width:4px
+    class R,E,V,S new
+```
+
+| | v1 | v2 |
+| --- | --- | --- |
+| Regime | The classifier alone | The classifier plus an independent check by a second model |
+| Automatic send or route | Allowed if the classifier was at least 60% confident | Also needs the check to agree, and the request to be in English |
+| Deadline | Clear FOI cases only, after routing | Every regime, before routing (SAR: one month) |
+| Search | One BM25 search | Plus a bounded search tool (up to 3 read-only searches) |
+
 ## Results
 
-Dev split, the same 42 examples in both runs. Better and worse count examples that changed.
+**Held-out test split:** 21 examples that were never looked at or tuned on. Better and worse count examples that changed.
 
 | Evaluator | v1 | v2 | Better | Worse |
 | --- | --- | --- | --- | --- |
-| `no_wrong_auto_action` (headline; v1 scored on 34 runs) | 82% | 100% | 6 | 0 |
-| `no_unsafe_send` | 98% | 100% | 1 | 0 |
+| `no_wrong_auto_action` (headline) | 81% | 100% | 4 | 0 |
+| `no_unsafe_send` | 100% | 100% | 0 | 0 |
+| `regime_correct` | 76% | 100% | 5 | 0 |
+| `action_correct` | 65% | 86% | 4 | 0 |
+| `deadline_correct` | 65% | 100% | 6 | 0 |
+| `draft_judge_j2` (same judge on both) | 55% | 67% | 0 | 0 |
+| `sends_when_expected` (n=5) | 40% | 60% | 1 | 0 |
+
+**Dev split:** the 42 examples I iterated on.
+
+| Evaluator | v1 | v2 | Better | Worse |
+| --- | --- | --- | --- | --- |
+| `no_wrong_auto_action` (v1 scored on 34 runs) | 82% | 100% | 6 | 0 |
 | `regime_correct` | 79% | 95% | 7 | 1 |
 | `action_correct` | 73% | 83% | 7 | 2 |
 | `deadline_correct` | 61% | 100% | 12 | 0 |
-| `exemption_precision` (n=7 and 10) | 64% | 83% | 1 | 1 |
 | `draft_judge_j2` (same judge on both) | 59% | 76% | 2 | 0 |
-| `sends_when_expected` (cost of caution) | 56% | 56% | 2 | 2 |
+| `sends_when_expected` (n=9) | 56% | 56% | 2 | 2 |
 
-- v2 has no wrong automatic actions, and every deadline is right.
-- Both examples that got worse escalated a case the agent could have handled. When unsure, an officer looks.
-- The held-out test split (21 examples) hasn't been run yet.
+- v2 has no wrong automatic actions and every deadline is right, on both splits.
+- On test, no example got worse on any evaluator, so the fixes generalise rather than fitting the dev examples.
+- The 2 dev examples that got worse both escalated a case the agent could have handled. When unsure, an officer looks.
 
 ## How I know it's doing a good job
 
@@ -65,7 +107,7 @@ Dev split, the same 42 examples in both runs. Better and worse count examples th
 - **Caution costs sends.** `sends_when_expected` is still 56%. The regime check called a parking request EIR in one run and FOI in the next.
 - **No "not held" or "clarify" outcome.** Left out on purpose: the agent can't know who holds the information, and clarifying restarts the clock.
 - **The judge isn't calibrated** against human labels yet.
-- **Small numbers.** Some slices have 3 to 5 examples, and outputs vary between runs.
+- **Small numbers.** Some slices have 3 to 5 examples, test has 21, and outputs vary between runs.
 
 ## Why there's no truly useful tool
 
@@ -100,6 +142,8 @@ Dev split, the same 42 examples in both runs. Better and worse count examples th
 | `v1-full-dev-baseline-09001cf0` | v1 baseline |
 | `v2-full-dev-626a3f63` | v2 with the search tool |
 | `v2-full-dev-notool-a63ad266` | v2 without the search tool |
+| `v1-full-test-633b6b3c` | v1 on the held-out test split |
+| `v2-full-test-0ea786b4` | v2 on the held-out test split |
 
 To reproduce them, see the Evaluation section of the [README](README.md).
 
