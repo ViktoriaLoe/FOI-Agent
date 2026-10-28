@@ -50,62 +50,59 @@ flowchart TD
 | `regime_correct` | 76% | 100% | 5 | 0 |
 | `action_correct` | 65% | 86% | 4 | 0 |
 | `deadline_correct` | 65% | 100% | 6 | 0 |
-| `draft_judge_j2` (same judge on both) | 55% | 67% | 0 | 0 |
 | `sends_when_expected` (n=5) | 40% | 60% | 1 | 0 |
 
-**Dev split:** the 42 examples I iterated on.
+- No example got worse on any evaluator, so the fixes generalise rather than fitting the examples I iterated on.
+- On the 42 dev examples, the same pattern: `no_wrong_auto_action` 82% → 100%, `regime_correct` 79% → 95%, `action_correct` 73% → 83%, `deadline_correct` 61% → 100%. The 2 dev examples that got worse both escalated a case the agent could have handled.
 
-| Evaluator | v1 | v2 | Better | Worse |
-| --- | --- | --- | --- | --- |
-| `no_wrong_auto_action` (v1 scored on 34 runs) | 82% | 100% | 6 | 0 |
-| `regime_correct` | 79% | 95% | 7 | 1 |
-| `action_correct` | 73% | 83% | 7 | 2 |
-| `deadline_correct` | 61% | 100% | 12 | 0 |
-| `draft_judge_j2` (same judge on both) | 59% | 76% | 2 | 0 |
-| `sends_when_expected` (n=9) | 56% | 56% | 2 | 2 |
+## From eval finding to fix
 
-- v2 has no wrong automatic actions and every deadline is right, on both splits.
-- On test, no example got worse on any evaluator, so the fixes generalise rather than fitting the dev examples.
-- The 2 dev examples that got worse both escalated a case the agent could have handled. When unsure, an officer looks.
+| What the evals showed | What I changed | Result, v1 → v2 |
+| --- | --- | --- |
+| The classifier scored 55%: 16 of 30 FOI requests were confidently labelled SAR. BM25 over the five regime summaries often returned only the SAR one | The classifier sees all five summaries. Its criteria now say SAR means the requester's own data only | `regime_correct` 76% → 100% (test) |
+| Grouped by slice, the adversarial requests scored 100% on `no_unsafe_send` but all 3 were routed automatically as SARs, a prompt injection among them | Widened the safety metric from sends to any automatic action | Adversarial slice: `no_wrong_auto_action` 0% → 100% (dev) |
+| Confidence can't separate right from wrong: wrong automatic routes scored 0.86 to 1.00, right ones 0.61 to 0.99 | A second model checks the regime independently. Sending or routing needs it to agree, a clear regime, and a request in English | `no_wrong_auto_action` 81% → 100% (test) |
+| EIR and unclear cases got no deadline, because only clear FOI cases reached that step | The deadline is set before routing, by regime (a SAR gets one month) | `deadline_correct` 65% → 100% (test) |
+| The judge failed 13 escalated drafts for placeholders where an officer must add figures, which is correct behaviour. Two of its failures were real drafting errors | The judge judges by purpose (sent or escalated), on a different, pinned model. The draft prompt now tells the drafter never to contradict the assessment | `draft_judge_j2` 59% → 76% (dev, same judge on both) |
+| s40 was raised on plain statistics | s40 only for identifiable people or small breakdowns | `exemption_precision` 64% → 83% (dev, n=7 and 10) |
+| Some labels have more than one defensible answer | Listed eight for an FOI officer to settle, rather than relabelling them myself | Results on those examples are provisional |
+
+**What I took from it:**
+- Read the failures, then check the pattern by slice. The adversarial problem was invisible in the overall score.
+- Check the evaluator before the agent. The first judge and a personal-data check (which flagged the ICO's own address) were both wrong.
+- Retrieval should add evidence, not filter a classifier's options.
 
 ## How I know it's doing a good job
 
-**Dataset:** [63 labelled requests](evals/datasets/golden.jsonl) (details in the [dataset README](evals/datasets/README.md)).
-- 16 normal, 27 edge cases, 20 high-risk failures.
-- Includes SARs worded as FOI, prompt injection, a Polish request, and requests built to tempt a wrong send.
-- Labels give the outcome an officer would want. 14 should be sent, so escalating everything also fails.
+**Dataset:** [63 labelled requests](evals/datasets/golden.jsonl), split 42 dev and 21 held-out test (details in the [dataset README](evals/datasets/README.md)). Each request has a category from the brief, and a slice that points to the part of the agent it tests:
+
+| Category | Slices |
+| --- | --- |
+| Normal (16) | `published` (signpost it), `plain_provide`, `routine` (a plain SAR, service request or EIR) |
+| Edge (27) | `vocab_mismatch` (incl. a Polish request), `partly_published` (wrong year, multi-part), `exemption`, `not_held`, `too_broad`, `published`, `plain_provide` |
+| High risk (20) | `regime_trap` (SARs and EIR worded as FOI, mixed requests), `adversarial` (prompt injection, abuse), `unsafe_send_bait` |
+
+- Labels give the outcome an officer would want, not what the agent can do. 14 should be sent, so escalating everything also fails.
 - Deadlines follow FOIA s10(6): bank holidays in any part of the UK count.
 - Labels were committed before any run.
 
 **Evaluators:** code wherever code can answer the question.
-- **8 label-free checks,** which also run on live traces: citations retrieved, real FOIA sections, links from the evidence, no added personal data, no placeholders in sent replies.
-- **12 label checks:** regime, action, decision, published record, exemptions, deadline, retrieval recall. The headline is `no_wrong_auto_action`, because a wrong send or route is the harm that can't be undone.
-- **2 trajectory checks** on the search tool.
-- **An LLM judge** for the one thing code can't check: is the draft right for the case. It runs on a different, pinned model, and its version is in the score key.
 
-## What the evals taught me
+| Evaluators | Needs labels? | Runs on live traffic? | What they check |
+| --- | --- | --- | --- |
+| 8 checks | No (reference-free) | Yes | Citations were retrieved, exemptions are real FOIA sections, links come from the evidence, no personal data added, no placeholders in sent replies |
+| 12 label checks | Yes | No | Regime, action, decision, published record, exemptions, deadline, retrieval recall. Headline: `no_wrong_auto_action` |
+| 2 trajectory checks | Partly | Searches only | How often the tool searched, and whether it found relevant records the first search missed |
+| LLM judge | Yes (reference-guided) | Not yet | Whether the draft is right for the case. On a different, pinned model, with its version in the score key |
 
-1. **Retrieval was filtering the classifier's options.**
-   - The first classification run scored 55%, with 16 of 30 FOI requests confidently labelled SAR.
-   - BM25 over the five regime summaries often returned only the SAR one.
-   - With all five supplied, it reached 78%, so I removed the retrieval step.
-2. **Confidence doesn't separate right from wrong.**
-   - Wrong automatic routes had confidence 0.86 to 1.00, right ones 0.61 to 0.99.
-   - So v2 adds a second model's independent view of the regime, and an automatic action needs it to agree.
-3. **Routing is an automatic action too.**
-   - Six FOI requests, including a prompt injection, got an automatic "this is a SAR" reply.
-   - The safety metric only counted sends, so I widened it.
-4. **The first judge was measuring something impossible.**
-   - It failed 13 escalated drafts for placeholders where an officer must supply figures, which is correct behaviour.
-   - I fixed the rubric to judge by purpose rather than make the judge lenient, because two of its failures were real errors.
-5. **Some labels are disputed.** I listed eight for an FOI officer to settle rather than relabelling them myself.
+The judge is the only model-based evaluator, kept for the one question code can't answer. On live traffic it would judge the draft against the agent's own decision, since there are no labels.
 
 ## Where it still struggles
 
 - **A reply was sent with an officer note in it.** The send is decided before the draft is written. Fix: check the draft before sending.
 - **A sent signpost didn't cite s21,** which the law requires. Fix: a template for sent replies, with code adding the legal wording.
 - **Caution costs sends.** `sends_when_expected` is still 56%. The regime check called a parking request EIR in one run and FOI in the next.
-- **No "not held" or "clarify" outcome.** Left out on purpose: the agent can't know who holds the information, and clarifying restarts the clock.
+- **No "not held" or "clarify" outcome.** Left out on purpose. The agent can't reliably know who does hold the information. And asking the requester to clarify stops the 20-day clock, which starts again from day one when they reply, so it changes the legal deadline and shouldn't be automatic yet.
 - **The judge isn't calibrated** against human labels yet.
 - **Small numbers.** Some slices have 3 to 5 examples, test has 21, and outputs vary between runs.
 
@@ -126,7 +123,7 @@ flowchart TD
 
 ## Evaluating in production
 
-- Run the label-free checks on every trace. [score_traces.py](evals/score_traces.py) already attaches them as LangSmith feedback.
+- Turn the label-free checks into a LangSmith online evaluator, so every new trace is scored automatically. Today [score_traces.py](evals/score_traces.py) does this by hand.
 - Run the judge on a sample, against the agent's own decision, since live traffic has no labels.
 - Use officer decisions as labels. The review UI already logs approve, edit and reject as feedback.
 - Send failures to an annotation queue, and add confirmed cases to the golden set.
@@ -136,16 +133,27 @@ flowchart TD
 
 **[Open the dataset and experiments in LangSmith](https://smith.langchain.com/public/804b9bd4-47cf-413d-b42a-32f0f1798ba4/d)** (public link). Each experiment row opens its traces, and the Compare view puts runs side by side.
 
-| Experiment | What it is |
+| Comparison | Experiments, before → after |
 | --- | --- |
-| `v1-classify-dev-e80d9114` | Classifier with retrieved guidance (55%) |
-| `v1-full-dev-baseline-09001cf0` | v1 baseline |
-| `v2-full-dev-626a3f63` | v2 with the search tool |
-| `v2-full-dev-notool-a63ad266` | v2 without the search tool |
-| `v1-full-test-633b6b3c` | v1 on the held-out test split |
-| `v2-full-test-0ea786b4` | v2 on the held-out test split |
+| **v1 → v2 on the held-out test split** (the main result) | `v1-full-test-633b6b3c` → `v2-full-test-0ea786b4` |
+| v1 → v2 on dev | `v1-full-dev-baseline-09001cf0` → `v2-full-dev-626a3f63` |
+| The classifier fix within v1: retrieved guidance (55%) → all guidance | `v1-classify-dev-e80d9114` → `v1-full-dev-baseline-09001cf0` |
+| The search tool: without → with, both v2 on dev | `v2-full-dev-notool-a63ad266` → `v2-full-dev-626a3f63` |
 
 To reproduce them, see the Evaluation section of the [README](README.md).
+
+## Extras from the brief
+
+| Extra | Where |
+| --- | --- |
+| Results by slice | Every example has a slice and a category (normal, edge, high risk). Filter by them in any experiment |
+| Tool calls and trajectories | `searches_made` and `tool_found_relevant`, and the with/without comparison above |
+| Intentionally tricky examples | 20 high-risk examples: SARs worded as FOI, prompt injection, unsafe-send bait, a Polish request |
+| Online evaluation | [score_traces.py](evals/score_traces.py) scores live traces and attaches the results as feedback. Officer decisions in the UI are logged as feedback too |
+| PII and guardrails | No automatic action unless the regime check agrees; a check for personal data added to replies; injected instructions can't trigger a send, because sending is code |
+| Streaming | The demo UI streams each case through the graph, node by node |
+| Judge calibration | Not done. The plan: label about 20 drafts blind and measure agreement with the judge, especially drafts it passes that a human would fail |
+| Setup script or Docker | Not done. Setup is the four Quickstart commands in the README |
 
 ## How I used a coding assistant
 
