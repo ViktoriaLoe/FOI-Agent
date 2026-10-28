@@ -131,7 +131,11 @@ The judge is the only model-based evaluator, kept for the one question code can'
 
 ## Traces and experiments
 
-**[Open the dataset and experiments in LangSmith](https://smith.langchain.com/public/804b9bd4-47cf-413d-b42a-32f0f1798ba4/d)** (public link). Each experiment row opens its traces, and the Compare view puts runs side by side.
+**[Open the dataset and experiments in LangSmith](https://smith.langchain.com/public/804b9bd4-47cf-413d-b42a-32f0f1798ba4/d)** (public link).
+
+1. On the Experiments tab, tick the two experiments in a row of the table below and click **Compare**. Each example then shows both runs side by side, with every evaluator's score.
+2. Click any example to open its trace: every step, each model call with its prompt and output, and each search with the records it returned.
+3. Group by the `slice` or `category` metadata to see results by type of request. For example, `adversarial` shows the automatic routes v1 got wrong.
 
 | Comparison | Experiments, before → after |
 | --- | --- |
